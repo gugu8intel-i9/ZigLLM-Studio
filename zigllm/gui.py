@@ -1,0 +1,81 @@
+from .config import RunConfig
+
+CSS = """
+:root { --ink:#f5f5f5; --muted:#929292; --line:#292929; --panel:#111; }
+body,.gradio-container { background:#000 !important; color:var(--ink); }
+.gradio-container { max-width:1120px !important; padding-bottom:40px !important; }
+#hero { padding:34px 0 24px; border-bottom:1px solid var(--line); margin:0 0 26px; }
+#hero h1 { font-size:38px; font-weight:600; letter-spacing:-1.5px; margin:0 0 8px; color:#fff; }
+#hero p { color:var(--muted); font-size:15px; margin:0; }
+.section { border:1px solid var(--line); border-radius:10px; padding:18px; background:var(--panel); }
+.section h3 { margin-top:0; color:#fff; font-size:14px; font-weight:600; }
+input,textarea,.gr-box,.gr-input,select { background:#080808 !important; border-color:#303030 !important; color:#f5f5f5 !important; }
+input:focus,textarea:focus { border-color:#777 !important; box-shadow:0 0 0 1px #777 !important; }
+#start,#benchmark-run { border-radius:8px; background:#fff; color:#000; border:1px solid #fff; font-weight:600; font-size:15px; }
+#start:hover,#benchmark-run:hover { background:#d8d8d8; }
+#log textarea { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+.badge { display:inline-block; padding:4px 9px; border-radius:4px; margin-right:6px; font-size:11px; background:#171717; color:#cfcfcf; border:1px solid #333; }
+"""
+
+def launch():
+    import gradio as gr
+
+    def start(model, arch, mode, adapter, device, provider, dataset, split, column, seq, batch, accum, epochs, lr, rank):
+        from .engine import Trainer
+        try:
+            cfg=RunConfig(model_id=model,architecture=arch,mode=mode,adapter=adapter,device=device,dataset_id=dataset,dataset_split=split,text_column=column,seq_len=int(seq),batch_size=int(batch),grad_accum=int(accum),epochs=float(epochs),learning_rate=float(lr),lora_rank=int(rank))
+            return "✓ Configuration validated\n→ Launching training job...\n" + Trainer(cfg,dataset_provider=provider).run()
+        except Exception as e: return "✕ ERROR: " + str(e)
+
+    def benchmark(model, name, device, limit):
+        from .benchmarks import run_benchmark
+        try: return run_benchmark(name, model, int(limit), device)
+        except Exception as e: return "✕ ERROR: " + str(e)
+
+    with gr.Blocks(title="ZigLLM Studio", theme=gr.themes.Base(neutral_hue="slate"), css=CSS) as app:
+        gr.HTML("<div id='hero'><h1>ZigLLM Studio</h1><p>Train, fine-tune, and evaluate language models visually — optimized for Kaggle and Google Colab.</p><br><span class='badge'>Zig core</span><span class='badge'>LoRA / QLoRA</span><span class='badge'>Benchmarks</span></div>")
+        with gr.Tabs():
+            with gr.Tab("Training"):
+                with gr.Row():
+                    with gr.Column(scale=7, elem_classes="section"):
+                        gr.Markdown("### 01 · Model setup")
+                        model=gr.Textbox(label="Model checkpoint",value="Qwen/Qwen2.5-0.5B",info="Compatible Hugging Face checkpoint")
+                        with gr.Row():
+                            arch=gr.Dropdown(["transformer","looped_transformer","mamba"],value="transformer",label="Architecture")
+                            mode=gr.Radio(["train","finetune"],value="finetune",label="Run mode")
+                    with gr.Column(scale=5, elem_classes="section"):
+                        gr.Markdown("### 02 · Compute strategy")
+                        with gr.Row():
+                            adapter=gr.Dropdown(["full","lora","qlora"],value="lora",label="Memory strategy")
+                            device=gr.Dropdown(["auto","cuda","cpu"],value="auto",label="Device")
+                with gr.Row():
+                    with gr.Column(elem_classes="section"):
+                        gr.Markdown("### 03 · Data source")
+                        with gr.Row():
+                            provider=gr.Dropdown(["huggingface","kaggle"],value="huggingface",label="Provider")
+                            dataset=gr.Textbox(label="Dataset ID",placeholder="dataset/name or owner/dataset")
+                        with gr.Row():
+                            split=gr.Textbox(value="train",label="Split"); column=gr.Textbox(value="text",label="Text column")
+                with gr.Accordion("Advanced training controls",open=True):
+                    with gr.Row():
+                        seq=gr.Number(value=1024,label="Sequence length"); batch=gr.Number(value=1,label="Micro-batch"); accum=gr.Number(value=8,label="Grad accumulation"); epochs=gr.Number(value=1,label="Epochs")
+                    with gr.Row():
+                        lr=gr.Number(value=.0002,label="Learning rate"); rank=gr.Number(value=16,label="LoRA rank")
+                go=gr.Button("▶  Validate & start training",variant="primary",elem_id="start")
+                output=gr.Textbox(label="Live job log",lines=7,elem_id="log")
+                go.click(start,[model,arch,mode,adapter,device,provider,dataset,split,column,seq,batch,accum,epochs,lr,rank],output)
+            with gr.Tab("Benchmarks"):
+                gr.Markdown("### Evaluate a checkpoint")
+                gr.Markdown("Run standard scoring tasks directly, or get the official harness command for agent and cybersecurity benchmarks.")
+                with gr.Row():
+                    bm_model=gr.Textbox(label="Model checkpoint",value="Qwen/Qwen2.5-0.5B")
+                    bm_name=gr.Dropdown(["swe","gmsk8","hle","cybergym","hellaswag"],value="hellaswag",label="Benchmark")
+                with gr.Row():
+                    bm_device=gr.Dropdown(["auto","cuda","cpu"],value="auto",label="Device")
+                    bm_limit=gr.Number(value=0,label="Sample limit",info="0 = full benchmark")
+                gr.Markdown("**Available:** SWE-bench · GMSK8/GSM8K · HLE · CyberGym · HellaSwag")
+                bm_go=gr.Button("Run benchmark",variant="primary",elem_id="benchmark-run")
+                bm_output=gr.Textbox(label="Benchmark result / harness log",lines=10,elem_id="log")
+                bm_go.click(benchmark,[bm_model,bm_name,bm_device,bm_limit],bm_output)
+        gr.Markdown("<center><small>ZigLLM · transparent controls for reproducible experiments</small></center>")
+    app.launch()

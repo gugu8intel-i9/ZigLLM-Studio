@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zigllm"
+version = "0.1.0"
+description = "GPU/CPU LLM training control plane with a high-performance Zig core"
+requires-python = ">=3.9"
+dependencies = ["pydantic>=2", "requests>=2", "beautifulsoup4>=4"]
+
+[project.optional-dependencies]
+train = ["torch>=2.2", "transformers>=4.40", "datasets>=2.18", "accelerate>=0.28", "peft>=0.10", "bitsandbytes>=0.43", "gradio>=4.0"]
+bench = ["lm-eval>=0.4.2"]
+
+[project.scripts]
+zigllm = "zigllm.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["zigllm*"]

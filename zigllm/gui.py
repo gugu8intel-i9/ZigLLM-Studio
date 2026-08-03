@@ -2,15 +2,21 @@ from .config import RunConfig
 
 CSS = """
 :root { --ink:#f5f5f5; --muted:#929292; --line:#292929; --panel:#111; }
-body,.gradio-container { background:#000 !important; color:var(--ink); }
-.gradio-container { max-width:1120px !important; padding-bottom:40px !important; }
+html,body,#root,.gradio-container,.main { background:#000 !important; color:var(--ink); }
+body { margin:0 !important; }
+.gradio-container { width:100% !important; max-width:none !important; min-height:100vh !important; margin:0 !important; padding:0 5vw 40px !important; box-sizing:border-box !important; }
 #hero { padding:34px 0 24px; border-bottom:1px solid var(--line); margin:0 0 26px; }
 #hero h1 { font-size:38px; font-weight:600; letter-spacing:-1.5px; margin:0 0 8px; color:#fff; }
 #hero p { color:var(--muted); font-size:15px; margin:0; }
 .section { border:1px solid var(--line); border-radius:10px; padding:18px; background:var(--panel); }
 .section h3 { margin-top:0; color:#fff; font-size:14px; font-weight:600; }
-input,textarea,.gr-box,.gr-input,select { background:#080808 !important; border-color:#303030 !important; color:#f5f5f5 !important; }
+.gr-block,.gr-box,.gr-panel,.gr-form,.gr-group,.form,.panel { background:#111 !important; border-color:var(--line) !important; }
+input,textarea,.gr-box,.gr-input,select,[data-testid="textbox"] { background:#080808 !important; border-color:#303030 !important; color:#f5f5f5 !important; }
 input:focus,textarea:focus { border-color:#777 !important; box-shadow:0 0 0 1px #777 !important; }
+.tabitem,.tabs,.tab-nav { background:#000 !important; border-color:var(--line) !important; }
+.tab-nav button { color:#777 !important; background:#000 !important; }
+.tab-nav button.selected { color:#fff !important; border-color:#fff !important; }
+label,.label-wrap,.field-label { color:#aaa !important; }
 #start,#benchmark-run { border-radius:8px; background:#fff; color:#000; border:1px solid #fff; font-weight:600; font-size:15px; }
 #start:hover,#benchmark-run:hover { background:#d8d8d8; }
 #log textarea { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }

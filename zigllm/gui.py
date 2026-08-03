@@ -26,12 +26,19 @@ label,.label-wrap,.field-label { color:#aaa !important; }
 #start:hover,#benchmark-run:hover { background:#d8d8d8; }
 #log textarea { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
 .badge { display:inline-block; padding:4px 9px; border-radius:4px; margin-right:6px; font-size:11px; background:#171717; color:#cfcfcf; border:1px solid #333; }
+.dataset-row { padding:10px 12px; border-bottom:1px solid #1a1a1a; }
+.dataset-row:hover { background:#1a1a1a; }
+.dataset-id { color:#fff; font-weight:600; font-size:14px; }
+.dataset-meta { color:#777; font-size:12px; margin-top:2px; }
+.dataset-desc { color:#999; font-size:12px; margin-top:4px; }
+.perf-pill { display:inline-block; padding:2px 8px; border-radius:3px; font-size:11px; margin-right:4px; background:#1a1a1a; color:#aaa; border:1px solid #292929; }
 """
 
 def launch():
     import gradio as gr
 
-    def start(model, arch, mode, adapter, device, provider, dataset, split, column, seq, batch, accum, epochs, lr, rank):
+    def start(model, arch, mode, adapter, device, provider, dataset, split, column, seq, batch, accum, epochs, lr, rank,
+              grad_ckpt, flash_attn, torch_comp, num_w, warmup, stream):
         from .engine import Trainer
         try:
             auto_notes=[]
@@ -45,7 +52,15 @@ def launch():
                 extra=ensure_dependencies("training", qlora=True)
                 installed += extra
             if installed: auto_notes.append("Installed missing packages: " + ", ".join(dict.fromkeys(installed)))
-            cfg=RunConfig(model_id=model,architecture=arch,mode=mode,adapter=adapter,device=device,dataset_id=dataset,dataset_split=split,text_column=column,seq_len=int(seq),batch_size=int(batch),grad_accum=int(accum),epochs=float(epochs),learning_rate=float(lr),lora_rank=int(rank))
+            cfg=RunConfig(
+                model_id=model, architecture=arch, mode=mode, adapter=adapter, device=device,
+                dataset_id=dataset, dataset_split=split, text_column=column,
+                seq_len=int(seq), batch_size=int(batch), grad_accum=int(accum),
+                epochs=float(epochs), learning_rate=float(lr), lora_rank=int(rank),
+                gradient_checkpointing=bool(grad_ckpt), flash_attention=bool(flash_attn),
+                torch_compile=bool(torch_comp), num_workers=int(num_w),
+                warmup_ratio=float(warmup), streaming=bool(stream),
+            )
             prefix="✓ Configuration validated\n" + ("\n".join("⚙ " + n for n in auto_notes) + "\n" if auto_notes else "") + "→ Launching training job...\n"
             return prefix + Trainer(cfg,dataset_provider=provider).run()
         except Exception as e: return "✕ ERROR: " + str(e)
@@ -82,8 +97,36 @@ def launch():
         except FileNotFoundError: return "✕ Zig is not installed. Install Zig, then retry."
         except Exception as e: return "✕ ERROR: " + str(e)
 
+    def search_hf(query, sort, limit, task, lang, author):
+        from .datasets import search_datasets
+        try:
+            results = search_datasets(
+                query=query.strip(), sort=sort, limit=int(limit),
+                task=task if task != "all" else "", language=lang.strip(),
+                author=author.strip(),
+            )
+            if not results:
+                return "No datasets found. Try a different query or filter.", ""
+            # Format results for display
+            lines = [f"Found {len(results)} datasets (sorted by {sort}):\n"]
+            choices = []
+            for i, ds in enumerate(results, 1):
+                tags = ", ".join(ds.tags[:4]) if ds.tags else "—"
+                desc = (ds.description[:80] + "…") if len(ds.description) > 80 else ds.description
+                lines.append(f"{i}. {ds.id}")
+                lines.append(f"   ↓ {ds.downloads:,}  ❤ {ds.likes}  |  {tags}")
+                if desc:
+                    lines.append(f"   {desc}")
+                lines.append("")
+                choices.append(ds.id)
+            # First choice is selected by default
+            default = choices[0] if choices else ""
+            return "\n".join(lines), default
+        except Exception as e:
+            return f"✕ Search error: {e}", ""
+
     with gr.Blocks(title="ZigLLM Studio", theme=gr.themes.Base(neutral_hue="slate"), css=CSS) as app:
-        gr.HTML("<div id='hero'><h1>ZigLLM Studio</h1><p>Train, fine-tune, and evaluate language models visually — optimized for Kaggle and Google Colab.</p><br><span class='badge'>Zig core</span><span class='badge'>LoRA / QLoRA</span><span class='badge'>Benchmarks</span></div>")
+        gr.HTML("<div id='hero'><h1>ZigLLM Studio</h1><p>Train, fine-tune, and evaluate language models visually — optimized for Kaggle and Google Colab.</p><br><span class='badge'>Zig core</span><span class='badge'>LoRA / QLoRA</span><span class='badge'>Flash Attention</span><span class='badge'>Dataset Browser</span></div>")
         with gr.Tabs():
             with gr.Tab("Training"):
                 with gr.Row():
@@ -101,19 +144,53 @@ def launch():
                 with gr.Row():
                     with gr.Column(elem_classes="section"):
                         gr.Markdown("### 03 · Data source")
+                        gr.Markdown("*Use the **Dataset Browser** tab to search and pick datasets, or type an ID directly.*")
                         with gr.Row():
-                            provider=gr.Dropdown(["huggingface","kaggle"],value="huggingface",label="Provider")
+                            provider=gr.Dropdown(["huggingface","kaggle","local"],value="huggingface",label="Provider")
                             dataset=gr.Textbox(label="Dataset ID",placeholder="dataset/name or owner/dataset")
                         with gr.Row():
                             split=gr.Textbox(value="train",label="Split"); column=gr.Textbox(value="text",label="Text column")
-                with gr.Accordion("Advanced training controls",open=True):
+                with gr.Accordion("Advanced training controls", open=False):
                     with gr.Row():
                         seq=gr.Number(value=1024,label="Sequence length"); batch=gr.Number(value=1,label="Micro-batch"); accum=gr.Number(value=8,label="Grad accumulation"); epochs=gr.Number(value=1,label="Epochs")
                     with gr.Row():
                         lr=gr.Number(value=.0002,label="Learning rate"); rank=gr.Number(value=16,label="LoRA rank")
+                with gr.Accordion("⚡ Performance tuning", open=True):
+                    gr.Markdown("<span class='perf-pill'>Flash Attn</span><span class='perf-pill'>Grad Checkpointing</span><span class='perf-pill'>torch.compile</span><span class='perf-pill'>Streaming</span>")
+                    with gr.Row():
+                        flash_attn = gr.Checkbox(label="Flash Attention 2 / SDPA", value=True, info="2-4x faster attention, lower VRAM (requires CUDA)")
+                        grad_ckpt = gr.Checkbox(label="Gradient checkpointing", value=False, info="Save ~40% VRAM at ~20% compute cost")
+                        torch_comp = gr.Checkbox(label="torch.compile()", value=False, info="Kernel fusion for 10-30% speedup (PyTorch 2+, CUDA)")
+                        stream = gr.Checkbox(label="Stream dataset", value=False, info="Don't load full dataset into RAM (for large datasets)")
+                    with gr.Row():
+                        num_w = gr.Slider(0, 16, value=2, step=1, label="DataLoader workers", info="Parallel data loading processes")
+                        warmup = gr.Slider(0.0, 0.3, value=0.03, step=0.01, label="Warmup ratio", info="Fraction of steps for LR warmup")
                 go=gr.Button("▶  Validate & start training",variant="primary",elem_id="start")
                 output=gr.Textbox(label="Live job log",lines=7,elem_id="log")
-                go.click(start,[model,arch,mode,adapter,device,provider,dataset,split,column,seq,batch,accum,epochs,lr,rank],output)
+                go.click(start,[model,arch,mode,adapter,device,provider,dataset,split,column,seq,batch,accum,epochs,lr,rank,
+                                grad_ckpt,flash_attn,torch_comp,num_w,warmup,stream],output)
+
+            with gr.Tab("Dataset Browser"):
+                gr.Markdown("### 🔍 Search Hugging Face Datasets")
+                gr.Markdown("Browse and search any public dataset on huggingface.co/datasets. Click a result to auto-fill the Training tab.")
+                with gr.Row():
+                    search_query = gr.Textbox(label="Search query", placeholder="e.g. code, math, medical, alpaca, instruction…", scale=3)
+                    search_sort = gr.Dropdown(["downloads", "likes", "trending", "lastModified", "createdAt"], value="downloads", label="Sort by")
+                    search_limit = gr.Slider(5, 100, value=20, step=5, label="Results")
+                with gr.Row():
+                    search_task = gr.Dropdown(
+                        ["all", "text-generation", "text-classification", "token-classification",
+                         "question-answering", "summarization", "translation", "fill-mask",
+                         "sentence-similarity", "table-question-answering", "zero-shot-classification"],
+                        value="all", label="Task")
+                    search_lang = gr.Textbox(label="Language", placeholder="e.g. en, code, fr", scale=1)
+                    search_author = gr.Textbox(label="Author", placeholder="e.g. tiiuae", scale=1)
+                search_go = gr.Button("🔍 Search datasets", variant="primary")
+                search_results = gr.Textbox(label="Results", lines=18, elem_id="log", interactive=False)
+                search_selected = gr.Textbox(label="Selected dataset ID", value="", info="This is the first result; edit or copy to the Training tab's Dataset ID field")
+                search_go.click(search_hf, [search_query, search_sort, search_limit, search_task, search_lang, search_author],
+                                [search_results, search_selected])
+
             with gr.Tab("Data tools"):
                 gr.Markdown("### CSV → optimized Parquet")
                 gr.Markdown("Stream large CSV exports into compressed, columnar Parquet without loading the entire file into memory.")
@@ -132,12 +209,14 @@ def launch():
                 scrape_go=gr.Button("Scrape page")
                 scrape_output=gr.Textbox(label="Extracted text", lines=8, elem_id="log")
                 scrape_go.click(scrape_page, [scrape_url, scrape_selector], scrape_output)
-            with gr.Tab("System"): 
+
+            with gr.Tab("System"):
                 gr.Markdown("### Zig core")
                 gr.Markdown("Compile the dependency-free Zig acceleration library with the same ReleaseFast settings used by the CLI.")
                 core_go=gr.Button("Build Zig core", variant="primary")
                 core_output=gr.Textbox(label="Build log", lines=6, elem_id="log")
                 core_go.click(build_core, outputs=core_output)
+
             with gr.Tab("Benchmarks"):
                 gr.Markdown("### Evaluate a checkpoint")
                 gr.Markdown("Run standard scoring tasks directly, or get the official harness command for agent and cybersecurity benchmarks.")

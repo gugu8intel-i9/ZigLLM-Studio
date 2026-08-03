@@ -29,6 +29,14 @@ class RunConfig(BaseModel):
     lora_alpha: int = Field(32, ge=1, le=1024)
     lora_dropout: float = Field(.05, ge=0, lt=1)
     max_samples: int = Field(0, ge=0)
+    # Performance toggles
+    gradient_checkpointing: bool = Field(False, description="Trade compute for VRAM by re-computing activations")
+    flash_attention: bool = Field(True, description="Enable Flash Attention 2 / SDPA for faster attention")
+    torch_compile: bool = Field(False, description="torch.compile() the model for kernel fusion speedups")
+    num_workers: int = Field(2, ge=0, le=16, description="DataLoader worker processes")
+    warmup_ratio: float = Field(0.03, ge=0.0, le=0.5, description="Fraction of steps for LR warmup")
+    streaming: bool = Field(False, description="Stream dataset instead of loading fully into memory")
+    compile_mode: str = Field("reduce-overhead", description="torch.compile mode: default, reduce-overhead, max-autotune")
     @field_validator("dataset_id")
     @classmethod
     def dataset_required(cls, v, info):

@@ -23,8 +23,20 @@ def launch():
     def start(model, arch, mode, adapter, device, provider, dataset, split, column, seq, batch, accum, epochs, lr, rank):
         from .engine import Trainer
         try:
+            auto_notes=[]
+            from .dependencies import ensure_dependencies
+            installed=ensure_dependencies("training", qlora=False)
+            import torch
+            if device == "auto" and adapter == "qlora" and not torch.cuda.is_available():
+                adapter = "lora"
+                auto_notes.append("CUDA unavailable: switched QLoRA to LoRA so training can run on CPU.")
+            elif adapter == "qlora":
+                extra=ensure_dependencies("training", qlora=True)
+                installed += extra
+            if installed: auto_notes.append("Installed missing packages: " + ", ".join(dict.fromkeys(installed)))
             cfg=RunConfig(model_id=model,architecture=arch,mode=mode,adapter=adapter,device=device,dataset_id=dataset,dataset_split=split,text_column=column,seq_len=int(seq),batch_size=int(batch),grad_accum=int(accum),epochs=float(epochs),learning_rate=float(lr),lora_rank=int(rank))
-            return "✓ Configuration validated\n→ Launching training job...\n" + Trainer(cfg,dataset_provider=provider).run()
+            prefix="✓ Configuration validated\n" + ("\n".join("⚙ " + n for n in auto_notes) + "\n" if auto_notes else "") + "→ Launching training job...\n"
+            return prefix + Trainer(cfg,dataset_provider=provider).run()
         except Exception as e: return "✕ ERROR: " + str(e)
 
     def benchmark(model, name, device, limit):
@@ -33,6 +45,8 @@ def launch():
         except Exception as e: return "✕ ERROR: " + str(e)
 
     def convert_csv(csv_file, output_path, compression, batch_size):
+        from .dependencies import ensure_dependencies
+        ensure_dependencies("data")
         from .datasets import csv_to_parquet
         try:
             if not csv_file: return "✕ Select a CSV file first"

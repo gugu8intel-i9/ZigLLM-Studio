@@ -11,6 +11,7 @@ A Kaggle/Google Colab-friendly LLM training control plane with a small, dependen
 - Benchmark tab for SWE-bench, GMSK8/GSM8K, HLE, CyberGym, and HellaSwag. GSM8K and HellaSwag can run through `lm-eval`; the other evaluations expose their official harness path because they require patches, tool traces, licensed data, or a sandbox.
 - Streaming CSV → compressed Parquet conversion with PyArrow, exposed in both the GUI and CLI. It uses record batches and dictionary encoding for efficient dataset storage.
 - Every CLI utility is also exposed in the GUI: CSV conversion, public-page scraping, and ReleaseFast Zig-core builds.
+- The GUI automatically installs missing Python runtime packages. If QLoRA is selected with `device=auto` but the notebook has no CUDA GPU, it automatically falls back to LoRA instead of failing; QLoRA itself still requires CUDA.
 - Zig `ReleaseFast` shared library for stable config validation and token-step arithmetic.
 
 ## Colab / Kaggle quick start

@@ -127,4 +127,8 @@ def launch():
                 bm_output=gr.Textbox(label="Benchmark result / harness log",lines=10,elem_id="log")
                 bm_go.click(benchmark,[bm_model,bm_name,bm_device,bm_limit],bm_output)
         gr.Markdown("<center><small>ZigLLM · transparent controls for reproducible experiments</small></center>")
-    app.launch()
+        import os
+        # Notebook VMs cannot expose 127.0.0.1 to the user's browser. Gradio's
+        # share tunnel is enabled automatically in Colab and Kaggle.
+        notebook = bool(os.environ.get("COLAB_RELEASE_TAG") or os.environ.get("KAGGLE_KERNEL_RUN_TYPE"))
+        app.launch(share=notebook, server_name="0.0.0.0" if notebook else None)

@@ -69,7 +69,7 @@ def launch():
         from .datasets import scrape
         try:
             texts = scrape(url, selector.strip() or None)
-            return f"✓ Extracted {len(texts)} text blocks\\n\\n" + "\\n\\n".join(texts)
+            return f"✓ Extracted {len(texts)} text blocks\n\n" + "\n\n".join(texts)
         except Exception as e: return "✕ ERROR: " + str(e)
 
     def build_core():
@@ -78,7 +78,7 @@ def launch():
         try:
             project_root = Path(__file__).resolve().parent.parent
             result = subprocess.run(["zig", "build", "-Doptimize=ReleaseFast"], text=True, capture_output=True, cwd=project_root)
-            return ("✓ Zig core built successfully\\n" if result.returncode == 0 else "✕ Build failed\\n") + (result.stdout + result.stderr)
+            return ("✓ Zig core built successfully\n" if result.returncode == 0 else "✕ Build failed\n") + (result.stdout + result.stderr)
         except FileNotFoundError: return "✕ Zig is not installed. Install Zig, then retry."
         except Exception as e: return "✕ ERROR: " + str(e)
 

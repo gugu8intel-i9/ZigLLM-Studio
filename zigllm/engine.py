@@ -31,7 +31,11 @@ class Trainer:
             from transformers import AutoTokenizer, AutoModelForCausalLM, TrainingArguments, Trainer as HFTrainer
         except ImportError as e: raise RuntimeError("Install zigllm[train] in the notebook") from e
         from .datasets import DatasetSource, fetch_dataset
-        cfg=self.config; device = "cuda" if cfg.device.value=="auto" and torch.cuda.is_available() else cfg.device.value
+        cfg=self.config
+        if cfg.device == Device.auto:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        else:
+            device = cfg.device.value
         if device == "cuda" and not torch.cuda.is_available(): raise RuntimeError("CUDA requested but unavailable")
         if cfg.architecture == Architecture.mamba and "mamba" not in cfg.model_id.lower():
             progress("Note: select a Mamba checkpoint (for example state-spaces/mamba-130m-hf) for native Mamba blocks.")
@@ -40,7 +44,10 @@ class Trainer:
         ds=fetch_dataset(DatasetSource(self.dataset_provider, cfg.dataset_id, cfg.dataset_split, cfg.text_column), cfg.max_samples)
         tok=AutoTokenizer.from_pretrained(cfg.model_id, use_fast=True)
         if tok.pad_token is None: tok.pad_token=tok.eos_token
-        def enc(batch): return tok(batch[cfg.text_column], truncation=True, max_length=cfg.seq_len)
+        def enc(batch):
+            tokens = tok(batch[cfg.text_column], truncation=True, max_length=cfg.seq_len)
+            tokens["labels"] = tokens["input_ids"]
+            return tokens
         ds=ds.map(enc, batched=True, remove_columns=ds.column_names)
         kwargs={"torch_dtype": torch.bfloat16 if device=="cuda" and torch.cuda.is_bf16_supported() else torch.float32}
         if cfg.adapter==Adapter.qlora:

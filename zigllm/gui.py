@@ -10,8 +10,13 @@ body { margin:0 !important; }
 #hero p { color:var(--muted); font-size:15px; margin:0; }
 .section { border:1px solid var(--line); border-radius:10px; padding:18px; background:var(--panel); }
 .section h3 { margin-top:0; color:#fff; font-size:14px; font-weight:600; }
-.gr-block,.gr-box,.gr-panel,.gr-form,.gr-group,.form,.panel { background:#111 !important; border-color:var(--line) !important; }
-input,textarea,.gr-box,.gr-input,select,[data-testid="textbox"] { background:#080808 !important; border-color:#303030 !important; color:#f5f5f5 !important; }
+    .gradio-container { --body-background-fill:#000 !important; --block-background-fill:#111 !important; --block-border-color:#292929 !important; --input-background-fill:#080808 !important; --input-border-color:#303030 !important; --body-text-color:#f5f5f5 !important; --block-label-text-color:#aaa !important; --body-text-color-subdued:#888 !important; --button-primary-background-fill:#fff !important; --button-primary-text-color:#000 !important; }
+.gr-block,.gr-box,.gr-panel,.gr-form,.gr-group,.form,.panel,.wrap,.block,.container,.gradio-group,
+[data-testid="textbox"],[data-testid="dropdown"],[data-testid="number"],[data-testid="radio"],[data-testid="accordion"],
+[data-testid="block-info"],.accordion,
+div[class*="block"],div[class*="form"],div[class*="panel"],div[class*="group"] { background:#111 !important; border-color:var(--line) !important; color:var(--ink) !important; }
+.gradio-container .wrap, .gradio-container .wrap > div { background:#111 !important; }
+input,textarea,select,[data-testid="textbox"] input,[data-testid="dropdown"] input,[data-testid="number"] input { background:#080808 !important; border-color:#303030 !important; color:#f5f5f5 !important; }
 input:focus,textarea:focus { border-color:#777 !important; box-shadow:0 0 0 1px #777 !important; }
 .tabitem,.tabs,.tab-nav { background:#000 !important; border-color:var(--line) !important; }
 .tab-nav button { color:#777 !important; background:#000 !important; }

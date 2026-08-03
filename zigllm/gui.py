@@ -40,6 +40,23 @@ def launch():
             return str(csv_to_parquet(path, output_path, None if compression == "none" else compression, int(batch_size)))
         except Exception as e: return "✕ ERROR: " + str(e)
 
+    def scrape_page(url, selector):
+        from .datasets import scrape
+        try:
+            texts = scrape(url, selector.strip() or None)
+            return f"✓ Extracted {len(texts)} text blocks\\n\\n" + "\\n\\n".join(texts)
+        except Exception as e: return "✕ ERROR: " + str(e)
+
+    def build_core():
+        import subprocess
+        from pathlib import Path
+        try:
+            project_root = Path(__file__).resolve().parent.parent
+            result = subprocess.run(["zig", "build", "-Doptimize=ReleaseFast"], text=True, capture_output=True, cwd=project_root)
+            return ("✓ Zig core built successfully\\n" if result.returncode == 0 else "✕ Build failed\\n") + (result.stdout + result.stderr)
+        except FileNotFoundError: return "✕ Zig is not installed. Install Zig, then retry."
+        except Exception as e: return "✕ ERROR: " + str(e)
+
     with gr.Blocks(title="ZigLLM Studio", theme=gr.themes.Base(neutral_hue="slate"), css=CSS) as app:
         gr.HTML("<div id='hero'><h1>ZigLLM Studio</h1><p>Train, fine-tune, and evaluate language models visually — optimized for Kaggle and Google Colab.</p><br><span class='badge'>Zig core</span><span class='badge'>LoRA / QLoRA</span><span class='badge'>Benchmarks</span></div>")
         with gr.Tabs():
@@ -83,6 +100,19 @@ def launch():
                 convert_go=gr.Button("Convert to Parquet", variant="primary")
                 convert_output=gr.Textbox(label="Conversion result", lines=4, elem_id="log")
                 convert_go.click(convert_csv, [csv_file, parquet_path, compression, batch_size], convert_output)
+                gr.Markdown("### Public web scraper")
+                with gr.Row():
+                    scrape_url=gr.Textbox(label="Page URL", placeholder="https://example.org/article")
+                    scrape_selector=gr.Textbox(label="CSS selector (optional)", placeholder="article p")
+                scrape_go=gr.Button("Scrape page")
+                scrape_output=gr.Textbox(label="Extracted text", lines=8, elem_id="log")
+                scrape_go.click(scrape_page, [scrape_url, scrape_selector], scrape_output)
+            with gr.Tab("System"): 
+                gr.Markdown("### Zig core")
+                gr.Markdown("Compile the dependency-free Zig acceleration library with the same ReleaseFast settings used by the CLI.")
+                core_go=gr.Button("Build Zig core", variant="primary")
+                core_output=gr.Textbox(label="Build log", lines=6, elem_id="log")
+                core_go.click(build_core, outputs=core_output)
             with gr.Tab("Benchmarks"):
                 gr.Markdown("### Evaluate a checkpoint")
                 gr.Markdown("Run standard scoring tasks directly, or get the official harness command for agent and cybersecurity benchmarks.")

@@ -10,6 +10,7 @@ A Kaggle/Google Colab-friendly LLM training control plane with a small, dependen
 - Hugging Face dataset loading, Kaggle download support through `kagglehub`, local JSON/JSONL/CSV, and a polite public-page scraper.
 - Benchmark tab for SWE-bench, GMSK8/GSM8K, HLE, CyberGym, and HellaSwag. GSM8K and HellaSwag can run through `lm-eval`; the other evaluations expose their official harness path because they require patches, tool traces, licensed data, or a sandbox.
 - Streaming CSV → compressed Parquet conversion with PyArrow, exposed in both the GUI and CLI. It uses record batches and dictionary encoding for efficient dataset storage.
+- Every CLI utility is also exposed in the GUI: CSV conversion, public-page scraping, and ReleaseFast Zig-core builds.
 - Zig `ReleaseFast` shared library for stable config validation and token-step arithmetic.
 
 ## Colab / Kaggle quick start

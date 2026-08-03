@@ -16,11 +16,23 @@ A Kaggle/Google Colab-friendly LLM training control plane with a small, dependen
 ## Colab / Kaggle quick start
 
 ```python
-!git clone <your-repository-url> zigllm
-%cd zigllm
-!sudo apt-get -qq update && sudo apt-get -qq install -y zig
-!pip install -e '.[train]'
-!zigllm build-core
+%cd /content
+!git clone https://github.com/gugu8intel-i9/ZigLLM-Studio.git zigllm
+%cd /content/zigllm
+!python -m pip install -e '.[train,data,bench]'
+# Optional: install Zig separately for the ReleaseFast core build.
+# The Python training/UI layer does not require Zig to launch.
+!python -m pip install ziglang
+!zig version
+!zig build -Doptimize=ReleaseFast
+!zigllm gui
+```
+
+If the repository was already cloned, do not run `git clone` again. Run:
+
+```python
+%cd /content/zigllm
+!python -m pip install -e '.[train,data,bench]'
 !zigllm gui
 ```
 

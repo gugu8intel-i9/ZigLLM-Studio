@@ -33,6 +33,28 @@ def fetch_dataset(source: DatasetSource, max_samples: int = 0):
     else: raise ValueError("provider must be huggingface, kaggle, or local")
     return ds.select(range(min(max_samples, len(ds)))) if max_samples else ds
 
+def csv_to_parquet(input_path: str, output_path: str, compression: str = "zstd", batch_size: int = 100_000) -> dict:
+    """Convert CSV to compressed Parquet in record batches, avoiding full-RAM loads."""
+    try:
+        import pyarrow as pa
+        import pyarrow.csv as pacsv
+        import pyarrow.parquet as pq
+    except ImportError as e:
+        raise RuntimeError("Install pyarrow to convert CSV: pip install pyarrow") from e
+    read_options = pacsv.ReadOptions(block_size=max(1, int(batch_size)) * 1024)
+    reader = pacsv.open_csv(input_path, read_options=read_options,
+                            convert_options=pacsv.ConvertOptions(strings_can_be_null=True))
+    writer = None; rows = 0; batches = 0
+    try:
+        for batch in reader:
+            if writer is None:
+                writer = pq.ParquetWriter(output_path, pa.schema(batch.schema), compression=compression, use_dictionary=True)
+            writer.write_batch(batch); rows += batch.num_rows; batches += 1
+    finally:
+        if writer is not None: writer.close()
+    if writer is None: raise ValueError("CSV contains no rows or header")
+    return {"input": input_path, "output": output_path, "rows": rows, "batches": batches, "compression": compression}
+
 def scrape(url: str, selector: Optional[str] = None) -> list[str]:
     """Respect robots.txt/terms and only scrape public pages you are allowed to use."""
     import requests

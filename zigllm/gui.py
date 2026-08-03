@@ -32,6 +32,14 @@ def launch():
         try: return run_benchmark(name, model, int(limit), device)
         except Exception as e: return "✕ ERROR: " + str(e)
 
+    def convert_csv(csv_file, output_path, compression, batch_size):
+        from .datasets import csv_to_parquet
+        try:
+            if not csv_file: return "✕ Select a CSV file first"
+            path = csv_file if isinstance(csv_file, str) else csv_file.name
+            return str(csv_to_parquet(path, output_path, None if compression == "none" else compression, int(batch_size)))
+        except Exception as e: return "✕ ERROR: " + str(e)
+
     with gr.Blocks(title="ZigLLM Studio", theme=gr.themes.Base(neutral_hue="slate"), css=CSS) as app:
         gr.HTML("<div id='hero'><h1>ZigLLM Studio</h1><p>Train, fine-tune, and evaluate language models visually — optimized for Kaggle and Google Colab.</p><br><span class='badge'>Zig core</span><span class='badge'>LoRA / QLoRA</span><span class='badge'>Benchmarks</span></div>")
         with gr.Tabs():
@@ -64,6 +72,17 @@ def launch():
                 go=gr.Button("▶  Validate & start training",variant="primary",elem_id="start")
                 output=gr.Textbox(label="Live job log",lines=7,elem_id="log")
                 go.click(start,[model,arch,mode,adapter,device,provider,dataset,split,column,seq,batch,accum,epochs,lr,rank],output)
+            with gr.Tab("Data tools"):
+                gr.Markdown("### CSV → optimized Parquet")
+                gr.Markdown("Stream large CSV exports into compressed, columnar Parquet without loading the entire file into memory.")
+                csv_file=gr.File(label="CSV input", file_types=[".csv"], type="filepath")
+                with gr.Row():
+                    parquet_path=gr.Textbox(value="dataset.parquet", label="Output path")
+                    compression=gr.Dropdown(["zstd","snappy","gzip","brotli","none"], value="zstd", label="Compression")
+                    batch_size=gr.Number(value=100000, label="Read block size")
+                convert_go=gr.Button("Convert to Parquet", variant="primary")
+                convert_output=gr.Textbox(label="Conversion result", lines=4, elem_id="log")
+                convert_go.click(convert_csv, [csv_file, parquet_path, compression, batch_size], convert_output)
             with gr.Tab("Benchmarks"):
                 gr.Markdown("### Evaluate a checkpoint")
                 gr.Markdown("Run standard scoring tasks directly, or get the official harness command for agent and cybersecurity benchmarks.")

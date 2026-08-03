@@ -12,6 +12,7 @@ dependencies = ["pydantic>=2", "requests>=2", "beautifulsoup4>=4"]
 [project.optional-dependencies]
 train = ["torch>=2.2", "transformers>=4.40", "datasets>=2.18", "accelerate>=0.28", "peft>=0.10", "bitsandbytes>=0.43", "gradio>=4.0"]
 bench = ["lm-eval>=0.4.2"]
+data = ["pyarrow>=15"]
 
 [project.scripts]
 zigllm = "zigllm.cli:main"

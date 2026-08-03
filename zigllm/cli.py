@@ -17,6 +17,26 @@ def main():
     s.add_argument("--task", default="", help="Filter by task (e.g. text-generation, summarization)")
     s.add_argument("--language", default="", help="Filter by language code (e.g. en, code)")
     s.add_argument("--author", default="", help="Filter by author/org")
+    
+    # Dataset creation
+    cd=sub.add_parser("create-dataset", help="create a custom training dataset")
+    cd.add_argument("--name", required=True, help="Dataset name")
+    cd.add_argument("--output", required=True, help="Output file path")
+    cd.add_argument("--format", default="jsonl", choices=["jsonl","json","parquet"], help="Output format")
+    cd.add_argument("--text", action="append", help="Text to add (can be repeated)")
+    cd.add_argument("--files", action="append", help="File paths to ingest (can be repeated)")
+    cd.add_argument("--urls", action="append", help="URLs to scrape (can be repeated)")
+    cd.add_argument("--selector", default=None, help="CSS selector for URL scraping")
+    cd.add_argument("--min-chars", type=int, default=40, help="Minimum character length (default: 40)")
+    cd.add_argument("--max-chars", type=int, default=0, help="Maximum character length (0=unlimited)")
+    cd.add_argument("--no-dedupe", action="store_true", help="Skip deduplication")
+    cd.add_argument("--split-train", type=float, default=0.9, help="Train split ratio")
+    cd.add_argument("--split-val", type=float, default=0.05, help="Validation split ratio")
+    cd.add_argument("--split-test", type=float, default=0.05, help="Test split ratio")
+    cd.add_argument("--push-hub", action="store_true", help="Upload to HuggingFace Hub (requires HF_TOKEN)")
+    cd.add_argument("--hub-repo", default="", help="Hub repo ID (e.g. username/dataset-name)")
+    cd.add_argument("--private", action="store_true", help="Make Hub dataset private")
+    
     args=p.parse_args()
 
     if args.command=="gui":
@@ -50,3 +70,43 @@ def main():
                 if desc:
                     print(f"      {desc}")
                 print()
+    elif args.command=="create-dataset":
+        from .creator import DatasetBuilder
+        if not (args.text or args.files or args.urls):
+            print("✕ No input provided. Use --text, --files, or --urls to add content.")
+            return
+        builder = DatasetBuilder(name=args.name)
+        # Ingest inputs
+        if args.text:
+            n = builder.add_texts(args.text, source="cli")
+            print(f"✓ Added {n} text samples")
+        if args.files:
+            n = builder.add_files(args.files)
+            print(f"✓ Ingested {n} samples from {len(args.files)} files")
+        if args.urls:
+            n = builder.add_urls(args.urls, selector=args.selector)
+            print(f"✓ Scraped {n} samples from {len(args.urls)} URLs")
+        # Build
+        result = builder.build(
+            output_path=args.output,
+            format=args.format,
+            dedupe=not args.no_dedupe,
+            min_chars=args.min_chars,
+            max_chars=args.max_chars,
+            split_ratios=(args.split_train, args.split_val, args.split_test),
+        )
+        print(f"\n✓ Dataset created: {result['output']}")
+        print(f"  Samples: {result['samples']}")
+        print(f"  Removed: {result['removed']}")
+        print(f"  Format: {result['format']}")
+        print(f"  Metadata: {result['metadata']}")
+        # Optional Hub upload
+        if args.push_hub:
+            if not args.hub_repo:
+                print("\n✕ --push-hub requires --hub-repo (e.g. username/dataset-name)")
+            else:
+                try:
+                    url = builder.push_to_hub(args.hub_repo, private=args.private)
+                    print(f"\n✓ Uploaded to HuggingFace Hub: {url}")
+                except Exception as e:
+                    print(f"\n✕ Hub upload failed: {e}")

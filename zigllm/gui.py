@@ -1,35 +1,5 @@
 from .config import RunConfig
 
-CSS = """
-:root { --ink:#f5f5f5; --muted:#929292; --line:#292929; --panel:#111; }
-html,body,#root,.gradio-container,.main { background:#000 !important; color:var(--ink); }
-body { margin:0 !important; }
-.gradio-container { width:100% !important; max-width:none !important; min-height:100vh !important; margin:0 !important; padding:0 5vw 40px !important; box-sizing:border-box !important; --body-background-fill:#000 !important; --block-background-fill:#111 !important; --block-border-color:#292929 !important; --input-background-fill:#080808 !important; --input-border-color:#303030 !important; --body-text-color:#f5f5f5 !important; --block-label-text-color:#aaa !important; --body-text-color-subdued:#888 !important; --button-primary-background-fill:#fff !important; --button-primary-text-color:#000 !important; }
-.section { border:1px solid var(--line); border-radius:10px; padding:18px; background:var(--panel); }
-.section h3 { margin-top:0; color:#fff; font-size:14px; font-weight:600; }
-.gr-block,.gr-box,.gr-panel,.gr-form,.gr-group,.form,.panel,.wrap,.block,.container,.gradio-group,
-[data-testid="textbox"],[data-testid="dropdown"],[data-testid="number"],[data-testid="radio"],[data-testid="accordion"],
-[data-testid="block-info"],.accordion,
-div[class*="block"],div[class*="form"],div[class*="panel"],div[class*="group"] { background:#111 !important; border-color:var(--line) !important; color:var(--ink) !important; }
-.gradio-container .wrap, .gradio-container .wrap > div { background:#111 !important; }
-input,textarea,select,[data-testid="textbox"] input,[data-testid="dropdown"] input,[data-testid="number"] input { background:#080808 !important; border-color:#303030 !important; color:#f5f5f5 !important; }
-input:focus,textarea:focus { border-color:#777 !important; box-shadow:0 0 0 1px #777 !important; }
-.tabitem,.tabs,.tab-nav { background:#000 !important; border-color:var(--line) !important; }
-.tab-nav button { color:#777 !important; background:#000 !important; }
-.tab-nav button.selected { color:#fff !important; border-color:#fff !important; }
-label,.label-wrap,.field-label { color:#aaa !important; }
-#start,#benchmark-run { border-radius:8px; background:#fff; color:#000; border:1px solid #fff; font-weight:600; font-size:15px; }
-#start:hover,#benchmark-run:hover { background:#d8d8d8; }
-.log-output textarea { font-family:ui-monospace,SFMono-Regular,Menlo,monospace !important; }
-.badge { display:inline-block; padding:4px 9px; border-radius:4px; margin-right:6px; font-size:11px; background:#171717; color:#cfcfcf; border:1px solid #333; }
-.dataset-row { padding:10px 12px; border-bottom:1px solid #1a1a1a; }
-.dataset-row:hover { background:#1a1a1a; }
-.dataset-id { color:#fff; font-weight:600; font-size:14px; }
-.dataset-meta { color:#777; font-size:12px; margin-top:2px; }
-.dataset-desc { color:#999; font-size:12px; margin-top:4px; }
-.perf-pill { display:inline-block; padding:2px 8px; border-radius:3px; font-size:11px; margin-right:4px; background:#1a1a1a; color:#aaa; border:1px solid #292929; }
-"""
-
 def launch():
     import gradio as gr
     import os
@@ -211,6 +181,85 @@ def launch():
         except Exception as e:
             return f"✕ Build error: {e}"
 
+    # ── Dark theme for Gradio 6.0 ────────────────────────────────────────
+    theme = gr.themes.Base(
+        primary_hue="slate",
+        neutral_hue="slate",
+        radius_size="lg",
+    ).set(
+        body_background_fill="#000000",
+        body_text_color="#f5f5f5",
+        body_text_color_subdued="#888888",
+        block_background_fill="#111111",
+        block_border_color="#292929",
+        block_label_background_fill="#111111",
+        block_label_text_color="#aaaaaa",
+        block_title_text_color="#ffffff",
+        input_background_fill="#080808",
+        input_border_color="#303030",
+        input_text_color="#f5f5f5",
+        input_placeholder_color="#666666",
+        button_primary_background_fill="#ffffff",
+        button_primary_text_color="#000000",
+        button_primary_background_fill_hover="#d8d8d8",
+        button_secondary_background_fill="#1a1a1a",
+        button_secondary_text_color="#cccccc",
+        button_secondary_background_fill_hover="#2a2a2a",
+        table_background_fill="#0a0a0a",
+        table_border_color="#292929",
+        table_even_background_fill="#0f0f0f",
+        table_odd_background_fill="#0a0a0a",
+    )
+
+    # ── CSS for Gradio 6.0 dark mode ─────────────────────────────────────
+    css = """
+/* Layout */
+body { margin:0 !important; }
+.gradio-container { width:100% !important; max-width:none !important; min-height:100vh !important; margin:0 !important; padding:0 5vw 40px !important; box-sizing:border-box !important; }
+
+/* Hero section */
+#hero { padding:34px 0 24px; border-bottom:1px solid #292929; margin:0 0 26px; }
+#hero h1 { font-size:38px; font-weight:600; letter-spacing:-1.5px; margin:0 0 8px; color:#fff; }
+#hero p { color:#929292; font-size:15px; margin:0; }
+
+/* Section boxes */
+.section { border:1px solid #292929 !important; border-radius:10px !important; padding:18px !important; background:#111 !important; }
+.section h3 { margin-top:0; color:#fff; font-size:14px; font-weight:600; }
+
+/* Form elements */
+input, textarea, select { background:#080808 !important; border-color:#303030 !important; color:#f5f5f5 !important; }
+input:focus, textarea:focus { border-color:#777 !important; box-shadow:0 0 0 1px #777 !important; }
+
+/* Dropdown popups - CRITICAL FIX for Gradio 6.0 */
+[data-testid="dropdown"] > div,
+.gr-dropdown-list,
+.options,
+.dropdown-menu,
+[role="listbox"],
+[role="option"] { background:#111 !important; color:#f5f5f5 !important; }
+[role="option"]:hover { background:#1a1a1a !important; }
+[role="option"][aria-selected="true"] { background:#292929 !important; }
+
+/* Tabs */
+.tabitem, .tabs, .tab-nav { background:#000 !important; border-color:#292929 !important; }
+.tab-nav button { color:#777 !important; background:#000 !important; }
+.tab-nav button.selected { color:#fff !important; border-color:#fff !important; }
+
+/* Labels */
+label, .label-wrap, .field-label { color:#aaa !important; }
+
+/* Buttons */
+#start, #benchmark-run { border-radius:8px; background:#fff; color:#000; border:1px solid #fff; font-weight:600; font-size:15px; }
+#start:hover, #benchmark-run:hover { background:#d8d8d8; }
+
+/* Log output */
+.log-output textarea { font-family:ui-monospace,SFMono-Regular,Menlo,monospace !important; background:#080808 !important; color:#f5f5f5 !important; }
+
+/* Badges */
+.badge { display:inline-block; padding:4px 9px; border-radius:4px; margin-right:6px; font-size:11px; background:#171717; color:#cfcfcf; border:1px solid #333; }
+.perf-pill { display:inline-block; padding:2px 8px; border-radius:3px; font-size:11px; margin-right:4px; background:#1a1a1a; color:#aaa; border:1px solid #292929; }
+"""
+
     # ── Build UI ────────────────────────────────────────────────────────
     with gr.Blocks(title="ZigLLM Studio") as app:
         gr.HTML("<div id='hero'><h1>ZigLLM Studio</h1><p>Train, fine-tune, and evaluate language models visually — optimized for Kaggle and Google Colab.</p><br><span class='badge'>Zig core</span><span class='badge'>LoRA / QLoRA</span><span class='badge'>Flash Attention</span><span class='badge'>Dataset Browser</span></div>")
@@ -349,7 +398,7 @@ def launch():
                             )
 
                     with gr.Column(scale=1):
-                        gr.Markdown("#### ⚙️ Configuration")
+                        gr.Markdown("#### ️ Configuration")
                         cd_name = gr.Textbox(
                             label="Dataset name",
                             value="my-dataset",
@@ -409,7 +458,7 @@ def launch():
                             )
 
                 with gr.Row():
-                    cd_preview = gr.Button("👁️ Preview Samples")
+                    cd_preview = gr.Button("️ Preview Samples")
                     cd_build = gr.Button("🔨 Build Dataset", variant="primary")
 
                 cd_preview_output = gr.Textbox(
@@ -438,7 +487,7 @@ def launch():
                     outputs=cd_output_log
                 )
 
-            # ── Benchmarks ──────────────────────────────────────────────
+            # ─ Benchmarks ──────────────────────────────────────────────
             with gr.Tab("Benchmarks"):
                 gr.Markdown("### Evaluate a checkpoint")
                 gr.Markdown("Run standard scoring tasks directly, or get the official harness command for agent and cybersecurity benchmarks.")
@@ -459,8 +508,8 @@ def launch():
     # share tunnel is enabled automatically in Colab and Kaggle.
     notebook = bool(os.environ.get("COLAB_RELEASE_TAG") or os.environ.get("KAGGLE_KERNEL_RUN_TYPE"))
     app.launch(
-        theme=gr.themes.Base(neutral_hue="slate"),
-        css=CSS,
+        theme=theme,
+        css=css,
         share=notebook,
         server_name="0.0.0.0" if notebook else None,
     )

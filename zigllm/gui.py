@@ -4,13 +4,9 @@ CSS = """
 :root { --ink:#f5f5f5; --muted:#929292; --line:#292929; --panel:#111; }
 html,body,#root,.gradio-container,.main { background:#000 !important; color:var(--ink); }
 body { margin:0 !important; }
-.gradio-container { width:100% !important; max-width:none !important; min-height:100vh !important; margin:0 !important; padding:0 5vw 40px !important; box-sizing:border-box !important; }
-#hero { padding:34px 0 24px; border-bottom:1px solid var(--line); margin:0 0 26px; }
-#hero h1 { font-size:38px; font-weight:600; letter-spacing:-1.5px; margin:0 0 8px; color:#fff; }
-#hero p { color:var(--muted); font-size:15px; margin:0; }
+.gradio-container { width:100% !important; max-width:none !important; min-height:100vh !important; margin:0 !important; padding:0 5vw 40px !important; box-sizing:border-box !important; --body-background-fill:#000 !important; --block-background-fill:#111 !important; --block-border-color:#292929 !important; --input-background-fill:#080808 !important; --input-border-color:#303030 !important; --body-text-color:#f5f5f5 !important; --block-label-text-color:#aaa !important; --body-text-color-subdued:#888 !important; --button-primary-background-fill:#fff !important; --button-primary-text-color:#000 !important; }
 .section { border:1px solid var(--line); border-radius:10px; padding:18px; background:var(--panel); }
 .section h3 { margin-top:0; color:#fff; font-size:14px; font-weight:600; }
-    .gradio-container { --body-background-fill:#000 !important; --block-background-fill:#111 !important; --block-border-color:#292929 !important; --input-background-fill:#080808 !important; --input-border-color:#303030 !important; --body-text-color:#f5f5f5 !important; --block-label-text-color:#aaa !important; --body-text-color-subdued:#888 !important; --button-primary-background-fill:#fff !important; --button-primary-text-color:#000 !important; }
 .gr-block,.gr-box,.gr-panel,.gr-form,.gr-group,.form,.panel,.wrap,.block,.container,.gradio-group,
 [data-testid="textbox"],[data-testid="dropdown"],[data-testid="number"],[data-testid="radio"],[data-testid="accordion"],
 [data-testid="block-info"],.accordion,
@@ -24,7 +20,7 @@ input:focus,textarea:focus { border-color:#777 !important; box-shadow:0 0 0 1px 
 label,.label-wrap,.field-label { color:#aaa !important; }
 #start,#benchmark-run { border-radius:8px; background:#fff; color:#000; border:1px solid #fff; font-weight:600; font-size:15px; }
 #start:hover,#benchmark-run:hover { background:#d8d8d8; }
-#log textarea { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+.log-output textarea { font-family:ui-monospace,SFMono-Regular,Menlo,monospace !important; }
 .badge { display:inline-block; padding:4px 9px; border-radius:4px; margin-right:6px; font-size:11px; background:#171717; color:#cfcfcf; border:1px solid #333; }
 .dataset-row { padding:10px 12px; border-bottom:1px solid #1a1a1a; }
 .dataset-row:hover { background:#1a1a1a; }
@@ -36,6 +32,7 @@ label,.label-wrap,.field-label { color:#aaa !important; }
 
 def launch():
     import gradio as gr
+    import os
 
     def start(model, arch, mode, adapter, device, provider, dataset, split, column, seq, batch, accum, epochs, lr, rank,
               grad_ckpt, flash_attn, torch_comp, num_w, warmup, stream):
@@ -107,7 +104,6 @@ def launch():
             )
             if not results:
                 return "No datasets found. Try a different query or filter.", ""
-            # Format results for display
             lines = [f"Found {len(results)} datasets (sorted by {sort}):\n"]
             choices = []
             for i, ds in enumerate(results, 1):
@@ -119,15 +115,107 @@ def launch():
                     lines.append(f"   {desc}")
                 lines.append("")
                 choices.append(ds.id)
-            # First choice is selected by default
             default = choices[0] if choices else ""
             return "\n".join(lines), default
         except Exception as e:
             return f"✕ Search error: {e}", ""
 
-    with gr.Blocks(title="ZigLLM Studio", theme=gr.themes.Base(neutral_hue="slate"), css=CSS) as app:
+    def dataset_preview(text_input, files, urls, selector, name, min_chars, max_chars, dedupe):
+        from .creator import DatasetBuilder
+        try:
+            builder = DatasetBuilder(name=name or "preview")
+            if text_input:
+                lines = [l.strip() for l in text_input.split("\n") if l.strip()]
+                builder.add_texts(lines, source="text-input")
+            if files:
+                file_list = files if isinstance(files, list) else [files]
+                builder.add_files(file_list)
+            if urls:
+                url_list = [u.strip() for u in urls.split("\n") if u.strip()]
+                builder.add_urls(url_list, selector=selector if selector else None)
+            if dedupe:
+                builder.dedupe()
+            if min_chars > 0:
+                builder.filter_min_length(int(min_chars))
+            if max_chars > 0:
+                builder.filter_max_length(int(max_chars))
+            samples = builder.preview(5)
+            if not samples:
+                return "No samples to preview. Add some content first."
+            lines = [f"Preview of first {len(samples)} samples:\n"]
+            for i, s in enumerate(samples, 1):
+                text = s.get("text", "")[:200]
+                if len(s.get("text", "")) > 200:
+                    text += "..."
+                lines.append(f"{i}. {text}")
+                lines.append(f"   Source: {s.get('source', 'unknown')}  Length: {len(s.get('text', ''))} chars")
+                lines.append("")
+            lines.append(f"Total samples before export: {len(builder.samples)}")
+            return "\n".join(lines)
+        except Exception as e:
+            return f"✕ Preview error: {e}"
+
+    def dataset_build(text_input, files, urls, selector, name, output, format, min_chars, max_chars, dedupe,
+                      split_train, split_val, split_test, hub_upload, hub_repo, hub_private):
+        from .creator import DatasetBuilder
+        try:
+            if not name:
+                return "✕ Dataset name is required"
+            if not output:
+                return "✕ Output path is required"
+            builder = DatasetBuilder(name=name)
+            log = [f"Building dataset: {name}\n"]
+            if text_input:
+                lines = [l.strip() for l in text_input.split("\n") if l.strip()]
+                n = builder.add_texts(lines, source="text-input")
+                log.append(f"✓ Added {n} samples from text input")
+            if files:
+                file_list = files if isinstance(files, list) else [files]
+                n = builder.add_files(file_list)
+                log.append(f"✓ Ingested {n} samples from {len(file_list)} files")
+            if urls:
+                url_list = [u.strip() for u in urls.split("\n") if u.strip()]
+                n = builder.add_urls(url_list, selector=selector if selector else None)
+                log.append(f"✓ Scraped {n} samples from {len(url_list)} URLs")
+            if not builder.samples:
+                return "✕ No samples collected. Add content from at least one source."
+            log.append(f"\nTotal samples before cleaning: {len(builder.samples)}")
+            result = builder.build(
+                output_path=output,
+                format=format,
+                dedupe=dedupe,
+                min_chars=int(min_chars),
+                max_chars=int(max_chars),
+                split_ratios=(float(split_train), float(split_val), float(split_test)),
+            )
+            log.append(f"\n✓ Dataset created successfully!")
+            log.append(f"  Output: {result['output']}")
+            log.append(f"  Samples: {result['samples']}")
+            if result['removed']:
+                log.append(f"  Removed: {result['removed']}")
+            log.append(f"  Format: {result['format']}")
+            log.append(f"  Metadata: {result['metadata']}")
+            if hub_upload:
+                if not hub_repo:
+                    log.append("\n⚠ Hub upload skipped: repo ID not specified")
+                else:
+                    try:
+                        url = builder.push_to_hub(hub_repo, private=hub_private)
+                        log.append(f"\n✓ Uploaded to HuggingFace Hub: {url}")
+                    except Exception as e:
+                        log.append(f"\n✕ Hub upload failed: {e}")
+            log.append("\n💡 Use this dataset in the Training tab:")
+            log.append(f"   Provider: local")
+            log.append(f"   Dataset ID: {result['output']}")
+            return "\n".join(log)
+        except Exception as e:
+            return f"✕ Build error: {e}"
+
+    # ── Build UI ────────────────────────────────────────────────────────
+    with gr.Blocks(title="ZigLLM Studio") as app:
         gr.HTML("<div id='hero'><h1>ZigLLM Studio</h1><p>Train, fine-tune, and evaluate language models visually — optimized for Kaggle and Google Colab.</p><br><span class='badge'>Zig core</span><span class='badge'>LoRA / QLoRA</span><span class='badge'>Flash Attention</span><span class='badge'>Dataset Browser</span></div>")
         with gr.Tabs():
+            # ── Training ────────────────────────────────────────────────
             with gr.Tab("Training"):
                 with gr.Row():
                     with gr.Column(scale=7, elem_classes="section"):
@@ -166,10 +254,11 @@ def launch():
                         num_w = gr.Slider(0, 16, value=2, step=1, label="DataLoader workers", info="Parallel data loading processes")
                         warmup = gr.Slider(0.0, 0.3, value=0.03, step=0.01, label="Warmup ratio", info="Fraction of steps for LR warmup")
                 go=gr.Button("▶  Validate & start training",variant="primary",elem_id="start")
-                output=gr.Textbox(label="Live job log",lines=7,elem_id="log")
+                output=gr.Textbox(label="Live job log",lines=7,elem_classes=["log-output"])
                 go.click(start,[model,arch,mode,adapter,device,provider,dataset,split,column,seq,batch,accum,epochs,lr,rank,
                                 grad_ckpt,flash_attn,torch_comp,num_w,warmup,stream],output)
 
+            # ── Dataset Browser ─────────────────────────────────────────
             with gr.Tab("Dataset Browser"):
                 gr.Markdown("### 🔍 Search Hugging Face Datasets")
                 gr.Markdown("Browse and search any public dataset on huggingface.co/datasets. Click a result to auto-fill the Training tab.")
@@ -186,11 +275,12 @@ def launch():
                     search_lang = gr.Textbox(label="Language", placeholder="e.g. en, code, fr", scale=1)
                     search_author = gr.Textbox(label="Author", placeholder="e.g. tiiuae", scale=1)
                 search_go = gr.Button("🔍 Search datasets", variant="primary")
-                search_results = gr.Textbox(label="Results", lines=18, elem_id="log", interactive=False)
+                search_results = gr.Textbox(label="Results", lines=18, elem_classes=["log-output"], interactive=False)
                 search_selected = gr.Textbox(label="Selected dataset ID", value="", info="This is the first result; edit or copy to the Training tab's Dataset ID field")
                 search_go.click(search_hf, [search_query, search_sort, search_limit, search_task, search_lang, search_author],
                                 [search_results, search_selected])
 
+            # ── Data tools ──────────────────────────────────────────────
             with gr.Tab("Data tools"):
                 gr.Markdown("### CSV → optimized Parquet")
                 gr.Markdown("Stream large CSV exports into compressed, columnar Parquet without loading the entire file into memory.")
@@ -200,32 +290,34 @@ def launch():
                     compression=gr.Dropdown(["zstd","snappy","gzip","brotli","none"], value="zstd", label="Compression")
                     batch_size=gr.Number(value=100000, label="Read block size")
                 convert_go=gr.Button("Convert to Parquet", variant="primary")
-                convert_output=gr.Textbox(label="Conversion result", lines=4, elem_id="log")
+                convert_output=gr.Textbox(label="Conversion result", lines=4, elem_classes=["log-output"])
                 convert_go.click(convert_csv, [csv_file, parquet_path, compression, batch_size], convert_output)
                 gr.Markdown("### Public web scraper")
                 with gr.Row():
                     scrape_url=gr.Textbox(label="Page URL", placeholder="https://example.org/article")
                     scrape_selector=gr.Textbox(label="CSS selector (optional)", placeholder="article p")
                 scrape_go=gr.Button("Scrape page")
-                scrape_output=gr.Textbox(label="Extracted text", lines=8, elem_id="log")
+                scrape_output=gr.Textbox(label="Extracted text", lines=8, elem_classes=["log-output"])
                 scrape_go.click(scrape_page, [scrape_url, scrape_selector], scrape_output)
 
+            # ── System ──────────────────────────────────────────────────
             with gr.Tab("System"):
                 gr.Markdown("### Zig core")
                 gr.Markdown("Compile the dependency-free Zig acceleration library with the same ReleaseFast settings used by the CLI.")
                 core_go=gr.Button("Build Zig core", variant="primary")
-                core_output=gr.Textbox(label="Build log", lines=6, elem_id="log")
+                core_output=gr.Textbox(label="Build log", lines=6, elem_classes=["log-output"])
                 core_go.click(build_core, outputs=core_output)
 
+            # ── Create Dataset ──────────────────────────────────────────
             with gr.Tab("Create Dataset"):
                 gr.Markdown("### 🛠️ Build Your Own Training Dataset")
                 gr.Markdown("Collect text from multiple sources, clean it, and export in a format ready for training.")
-                
+
                 with gr.Row():
                     with gr.Column(scale=2):
                         gr.Markdown("#### 📥 Input Sources")
                         gr.Markdown("*Add content from any combination of these sources:*")
-                        
+
                         with gr.Accordion("Text Input", open=True):
                             cd_text = gr.Textbox(
                                 label="Paste text (one sample per line)",
@@ -233,7 +325,7 @@ def launch():
                                 placeholder="The quick brown fox...\nAnother sample...\nYet another...",
                                 info="Each line becomes a separate training sample"
                             )
-                        
+
                         with gr.Accordion("File Upload", open=False):
                             cd_files = gr.File(
                                 label="Upload files (.txt, .md, .json, .jsonl)",
@@ -242,7 +334,7 @@ def launch():
                                 type="filepath"
                             )
                             gr.Markdown("*Long files (>5000 chars) are split into paragraphs automatically.*")
-                        
+
                         with gr.Accordion("Web Scraping", open=False):
                             cd_urls = gr.Textbox(
                                 label="URLs (one per line)",
@@ -255,7 +347,7 @@ def launch():
                                 placeholder="article p",
                                 info="Target specific HTML elements. Leave blank to extract all text."
                             )
-                    
+
                     with gr.Column(scale=1):
                         gr.Markdown("#### ⚙️ Configuration")
                         cd_name = gr.Textbox(
@@ -264,7 +356,7 @@ def launch():
                             placeholder="my-dataset",
                             info="Used in metadata and file naming"
                         )
-                        cd_output = gr.Textbox(
+                        cd_output_path = gr.Textbox(
                             label="Output path",
                             value="dataset.jsonl",
                             placeholder="dataset.jsonl",
@@ -276,7 +368,7 @@ def launch():
                             label="Format",
                             info="JSONL recommended for streaming, Parquet for compression"
                         )
-                        
+
                         with gr.Accordion("🧹 Cleaning Options", open=False):
                             cd_min_chars = gr.Slider(
                                 0, 1000, value=40, step=10,
@@ -293,13 +385,13 @@ def launch():
                                 value=True,
                                 info="Deduplicate by text content hash"
                             )
-                        
+
                         with gr.Accordion("📊 Train/Val/Test Splits", open=False):
                             gr.Markdown("*Ratios should sum to ~1.0*")
                             cd_split_train = gr.Slider(0.5, 1.0, value=0.9, step=0.05, label="Train")
                             cd_split_val = gr.Slider(0.0, 0.3, value=0.05, step=0.05, label="Validation")
                             cd_split_test = gr.Slider(0.0, 0.3, value=0.05, step=0.05, label="Test")
-                        
+
                         with gr.Accordion("☁️ Upload to HuggingFace Hub (Optional)", open=False):
                             cd_hub_upload = gr.Checkbox(
                                 label="Upload to Hub",
@@ -315,139 +407,24 @@ def launch():
                                 label="Private dataset",
                                 value=False
                             )
-                
+
                 with gr.Row():
                     cd_preview = gr.Button("👁️ Preview Samples")
                     cd_build = gr.Button("🔨 Build Dataset", variant="primary")
-                
+
                 cd_preview_output = gr.Textbox(
                     label="Preview (first 5 samples)",
                     lines=10,
                     interactive=False,
-                    elem_id="log"
+                    elem_classes=["log-output"]
                 )
                 cd_output_log = gr.Textbox(
                     label="Build Log",
                     lines=12,
                     interactive=False,
-                    elem_id="log"
+                    elem_classes=["log-output"]
                 )
-                
-                # Handlers
-                def dataset_preview(text_input, files, urls, selector, name, min_chars, max_chars, dedupe):
-                    from .creator import DatasetBuilder
-                    try:
-                        builder = DatasetBuilder(name=name or "preview")
-                        # Add text input
-                        if text_input:
-                            lines = [l.strip() for l in text_input.split("\n") if l.strip()]
-                            n = builder.add_texts(lines, source="text-input")
-                        # Add files
-                        if files:
-                            n = builder.add_files(files)
-                        # Add URLs
-                        if urls:
-                            url_list = [u.strip() for u in urls.split("\n") if u.strip()]
-                            n = builder.add_urls(url_list, selector=selector if selector else None)
-                        
-                        # Apply filters for preview
-                        if dedupe:
-                            builder.dedupe()
-                        if min_chars > 0:
-                            builder.filter_min_length(int(min_chars))
-                        if max_chars > 0:
-                            builder.filter_max_length(int(max_chars))
-                        
-                        # Show preview
-                        samples = builder.preview(5)
-                        if not samples:
-                            return "No samples to preview. Add some content first."
-                        
-                        lines = [f"Preview of first {len(samples)} samples:\n"]
-                        for i, s in enumerate(samples, 1):
-                            text = s.get("text", "")[:200]
-                            if len(s.get("text", "")) > 200:
-                                text += "..."
-                            lines.append(f"{i}. {text}")
-                            lines.append(f"   Source: {s.get('source', 'unknown')}  Length: {len(s.get('text', ''))} chars")
-                            lines.append("")
-                        
-                        lines.append(f"Total samples before export: {len(builder.samples)}")
-                        return "\n".join(lines)
-                    except Exception as e:
-                        return f"✕ Preview error: {e}"
-                
-                def dataset_build(text_input, files, urls, selector, name, output, format, min_chars, max_chars, dedupe,
-                                  split_train, split_val, split_test, hub_upload, hub_repo, hub_private):
-                    from .creator import DatasetBuilder
-                    try:
-                        if not name:
-                            return "✕ Dataset name is required"
-                        if not output:
-                            return "✕ Output path is required"
-                        
-                        builder = DatasetBuilder(name=name)
-                        log = [f"Building dataset: {name}\n"]
-                        
-                        # Add text input
-                        if text_input:
-                            lines = [l.strip() for l in text_input.split("\n") if l.strip()]
-                            n = builder.add_texts(lines, source="text-input")
-                            log.append(f"✓ Added {n} samples from text input")
-                        
-                        # Add files
-                        if files:
-                            n = builder.add_files(files)
-                            log.append(f"✓ Ingested {n} samples from {len(files)} files")
-                        
-                        # Add URLs
-                        if urls:
-                            url_list = [u.strip() for u in urls.split("\n") if u.strip()]
-                            n = builder.add_urls(url_list, selector=selector if selector else None)
-                            log.append(f"✓ Scraped {n} samples from {len(url_list)} URLs")
-                        
-                        if not builder.samples:
-                            return "✕ No samples collected. Add content from at least one source."
-                        
-                        log.append(f"\nTotal samples before cleaning: {len(builder.samples)}")
-                        
-                        # Build with cleaning and splitting
-                        result = builder.build(
-                            output_path=output,
-                            format=format,
-                            dedupe=dedupe,
-                            min_chars=int(min_chars),
-                            max_chars=int(max_chars),
-                            split_ratios=(float(split_train), float(split_val), float(split_test)),
-                        )
-                        
-                        log.append(f"\n✓ Dataset created successfully!")
-                        log.append(f"  Output: {result['output']}")
-                        log.append(f"  Samples: {result['samples']}")
-                        if result['removed']:
-                            log.append(f"  Removed: {result['removed']}")
-                        log.append(f"  Format: {result['format']}")
-                        log.append(f"  Metadata: {result['metadata']}")
-                        
-                        # Optional Hub upload
-                        if hub_upload:
-                            if not hub_repo:
-                                log.append("\n⚠ Hub upload skipped: --hub-repo not specified")
-                            else:
-                                try:
-                                    url = builder.push_to_hub(hub_repo, private=hub_private)
-                                    log.append(f"\n✓ Uploaded to HuggingFace Hub: {url}")
-                                except Exception as e:
-                                    log.append(f"\n✕ Hub upload failed: {e}")
-                        
-                        log.append("\n💡 Use this dataset in the Training tab:")
-                        log.append(f"   Provider: local")
-                        log.append(f"   Dataset ID: {result['output']}")
-                        
-                        return "\n".join(log)
-                    except Exception as e:
-                        return f"✕ Build error: {e}"
-                
+
                 cd_preview.click(
                     dataset_preview,
                     inputs=[cd_text, cd_files, cd_urls, cd_selector, cd_name, cd_min_chars, cd_max_chars, cd_dedupe],
@@ -455,12 +432,13 @@ def launch():
                 )
                 cd_build.click(
                     dataset_build,
-                    inputs=[cd_text, cd_files, cd_urls, cd_selector, cd_name, cd_output, cd_format,
+                    inputs=[cd_text, cd_files, cd_urls, cd_selector, cd_name, cd_output_path, cd_format,
                             cd_min_chars, cd_max_chars, cd_dedupe, cd_split_train, cd_split_val, cd_split_test,
                             cd_hub_upload, cd_hub_repo, cd_hub_private],
                     outputs=cd_output_log
                 )
 
+            # ── Benchmarks ──────────────────────────────────────────────
             with gr.Tab("Benchmarks"):
                 gr.Markdown("### Evaluate a checkpoint")
                 gr.Markdown("Run standard scoring tasks directly, or get the official harness command for agent and cybersecurity benchmarks.")
@@ -472,11 +450,17 @@ def launch():
                     bm_limit=gr.Number(value=0,label="Sample limit",info="0 = full benchmark")
                 gr.Markdown("**Available:** SWE-bench · GMSK8/GSM8K · HLE · CyberGym · HellaSwag")
                 bm_go=gr.Button("Run benchmark",variant="primary",elem_id="benchmark-run")
-                bm_output=gr.Textbox(label="Benchmark result / harness log",lines=10,elem_id="log")
+                bm_output=gr.Textbox(label="Benchmark result / harness log",lines=10,elem_classes=["log-output"])
                 bm_go.click(benchmark,[bm_model,bm_name,bm_device,bm_limit],bm_output)
+
         gr.Markdown("<center><small>ZigLLM · transparent controls for reproducible experiments</small></center>")
-        import os
-        # Notebook VMs cannot expose 127.0.0.1 to the user's browser. Gradio's
-        # share tunnel is enabled automatically in Colab and Kaggle.
-        notebook = bool(os.environ.get("COLAB_RELEASE_TAG") or os.environ.get("KAGGLE_KERNEL_RUN_TYPE"))
-        app.launch(share=notebook, server_name="0.0.0.0" if notebook else None)
+
+    # Notebook VMs cannot expose 127.0.0.1 to the user's browser. Gradio's
+    # share tunnel is enabled automatically in Colab and Kaggle.
+    notebook = bool(os.environ.get("COLAB_RELEASE_TAG") or os.environ.get("KAGGLE_KERNEL_RUN_TYPE"))
+    app.launch(
+        theme=gr.themes.Base(neutral_hue="slate"),
+        css=CSS,
+        share=notebook,
+        server_name="0.0.0.0" if notebook else None,
+    )

@@ -1,6 +1,6 @@
 """Flask server serving the ZigLLM Studio HTML UI and REST API."""
-from flask import Flask, request, jsonify, send_from_directory, Response
-import os, json, threading, time, uuid, traceback
+from flask import Flask, request, jsonify, send_from_directory
+import os, json, threading, time, uuid, traceback, subprocess, re
 from pathlib import Path
 
 app = Flask(__name__, static_folder=".", static_url_path="")
@@ -17,6 +17,31 @@ def _log(job_id, msg):
 
 def _get_log(job_id):
     return _job_logs.get(job_id, [])
+
+# Detect notebook environment
+_IN_NOTEBOOK = bool(os.environ.get("COLAB_RELEASE_TAG") or os.environ.get("KAGGLE_KERNEL_RUN_TYPE"))
+
+def _is_notebook():
+    """Detect if running inside Jupyter/IPython/Kaggle/Colab."""
+    if _IN_NOTEBOOK:
+        return True
+    try:
+        from IPython import get_ipython
+        shell = get_ipython().__class__.__name__
+        return shell in ("ZMQInteractiveShell", "Shell")
+    except Exception:
+        return False
+
+def _display_html(html):
+    """Render HTML in notebook output if available."""
+    if _is_notebook():
+        try:
+            from IPython.display import display, HTML
+            display(HTML(html))
+            return True
+        except ImportError:
+            pass
+    return False
 
 
 # ── Static file serving ─────────────────────────────────────────────
@@ -39,7 +64,7 @@ def health():
         "ok": True,
         "cuda": cuda,
         "gpu": gpu,
-        "version": "0.3.0",
+        "version": "0.4.0",
     })
 
 
@@ -122,7 +147,7 @@ def benchmark():
         return jsonify({"ok": False, "error": str(e)}), 400
 
 
-# ── Search datasets ─────────────────────────────────────────────────
+# ─ Search datasets ─────────────────────────────────────────────────
 @app.route("/api/search-datasets", methods=["POST"])
 def search_datasets():
     data = request.json or {}
@@ -153,7 +178,7 @@ def search_datasets():
         return jsonify({"ok": False, "error": str(e)}), 400
 
 
-# ── Create dataset ─────────────────────────────────────────────────
+# ── Create dataset ────────────────────────────────────────────────
 @app.route("/api/create-dataset/preview", methods=["POST"])
 def create_dataset_preview():
     data = request.json or {}
@@ -247,7 +272,6 @@ def scrape():
 # ── Build core ──────────────────────────────────────────────────────
 @app.route("/api/build-core", methods=["POST"])
 def build_core():
-    import subprocess
     try:
         result = subprocess.run(
             ["zig", "build", "-Doptimize=ReleaseFast"],
@@ -262,115 +286,171 @@ def build_core():
         return jsonify({"ok": False, "error": "Zig is not installed"}), 400
 
 
+# ── Show URL in notebook ───────────────────────────────────────────
+def _show_url(url, label="ZigLLM Studio"):
+    """Display a big clickable URL card in notebook output."""
+    html = f"""
+    <div style="background:#0a0a0a; border:2px solid #292929; border-radius:10px; padding:18px; margin:12px 0; font-family:-apple-system,sans-serif;">
+        <div style="color:#fff; font-size:15px; font-weight:600; margin-bottom:8px;">{label}</div>
+        <a href="{url}" target="_blank" style="display:block; background:#fff; color:#000; text-decoration:none; padding:10px 16px; border-radius:8px; font-size:14px; font-weight:600; text-align:center; margin:8px 0;">
+            🔗 Click to open →
+        </a>
+        <div style="color:#888; font-size:12px; font-family:monospace; word-break:break-all; margin-top:8px;">{url}</div>
+    </div>"""
+    _display_html(html)
+
+
 # ── Launch with tunnel support ──────────────────────────────────────
-def launch(host="0.0.0.0", port=7860, share=False, tunnel="ngrok"):
+def launch(host="0.0.0.0", port=7860, share=True, tunnel="cloudflared"):
     """Launch the web server with optional public tunnel.
 
     Args:
         host: Bind address (default: 0.0.0.0 for notebook environments)
         port: Local port (default: 7860)
-        share: Create a public tunnel (default: False)
-        tunnel: Tunnel provider: "ngrok", "cloudflared", or "localtunnel" (default: "ngrok")
-
-    Examples:
-        # Basic launch (localhost only)
-        launch()
-
-        # With ngrok tunnel (requires pyngrok)
-        launch(share=True, tunnel="ngrok")
-
-        # With cloudflared tunnel (free, no account)
-        launch(share=True, tunnel="cloudflared")
-
-        # With localtunnel (free, no account)
-        launch(share=True, tunnel="localtunnel")
+        share: Create a public tunnel (default: True in notebooks, False otherwise)
+        tunnel: Tunnel provider: "cloudflared", "localtunnel", "ngrok", or "kaggle"
+                - "cloudflared": free, no account, no splash page (default)
+                - "localtunnel": free, no account, has splash page
+                - "ngrok": requires account
+                - "kaggle": Kaggle-native port forwarding (prints instructions + clickable link)
     """
-    notebook = bool(os.environ.get("COLAB_RELEASE_TAG") or os.environ.get("KAGGLE_KERNEL_RUN_TYPE"))
+    notebook = bool(os.environ.get("COLAB_RELEASE_TAG") or os.environ.get("KAGGLE_KERNEL_RUN_TYPE")) or _is_notebook()
     actual_host = "0.0.0.0" if notebook else host
 
-    if share and notebook:
-        print(f"Starting ZigLLM Studio on port {port} with {tunnel} tunnel...")
-        threading.Thread(
-            target=_start_tunnel,
-            args=(tunnel, port),
-            daemon=True,
-        ).start()
-    elif share:
-        print("⚠ share=True only works in notebook environments (Colab/Kaggle)")
+    if notebook and share:
+        if tunnel == "kaggle":
+            # Kaggle-native: just run the server, print port-forwarding instructions
+            print(f"\n{'='*60}")
+            print(f"  ZigLLM Studio running on http://0.0.0.0:{port}")
+            print(f"{'='*60}")
+            print(f"\n  → In the right sidebar, click 'Add port' and enter {port}")
+            print(f"  → Click the generated Kaggle URL to open the UI\n")
+            _show_url(f"http://localhost:{port}", "ZigLLM Studio (add port in sidebar)")
+        else:
+            # Tunnel: start in background, then run Flask in main thread
+            print(f"\nStarting ZigLLM Studio with {tunnel} tunnel on port {port}...")
+            _tunnel_url = [None]
 
-    print(f"ZigLLM Studio web UI: http://localhost:{port}")
-    if share:
-        print("Tunnel URL will be printed once the tunnel is established...")
+            def _tunnel_thread():
+                url = _start_tunnel(tunnel, port)
+                if url:
+                    _tunnel_url[0] = url
+                    _show_url(url, "ZigLLM Studio — Tunnel Established")
+
+            threading.Thread(target=_tunnel_thread, daemon=True).start()
+
+            # Wait a bit so the tunnel URL can be discovered before Flask blocks
+            time.sleep(2)
+            if _tunnel_url[0]:
+                _show_url(_tunnel_url[0])
+            elif not notebook:
+                # Non-notebook: print localhost link
+                _show_url(f"http://localhost:{port}")
+    elif share and not notebook:
+        print("⚠ share=True auto-detected as non-notebook. Use tunnel='kaggle' for Kaggle.")
+
+    print(f"\nZigLLM Studio web UI: http://localhost:{port}")
+    print(f"{'='*60}\n")
     app.run(host=actual_host, port=port, debug=False, use_reloader=False)
 
 
 def _start_tunnel(provider, port):
-    """Start a tunnel in a background thread."""
-    import time
+    """Start a tunnel and return the public URL, or None on failure."""
+    import shutil
 
-    if provider == "ngrok":
-        try:
-            from pyngrok import ngrok
-            tunnel = ngrok.connect(port, "http")
-            print(f"✓ ngrok tunnel established: {tunnel.public_url}")
-        except ImportError:
-            print("✕ pyngrok not installed. Install with: pip install pyngrok")
-            print("  Or set NGROK_AUTH_TOKEN env var with your ngrok token")
-            print("  Alternatively, use tunnel='cloudflared' or tunnel='localtunnel'")
-        except Exception as e:
-            print(f"✕ ngrok tunnel failed: {e}")
+    if provider == "cloudflared":
+        # Auto-install cloudflared binary if missing
+        cf_bin = shutil.which("cloudflared")
+        if not cf_bin:
+            print("Installing cloudflared binary...")
+            try:
+                subprocess.run(
+                    ["curl", "-sSL", "-o", "/usr/local/bin/cloudflared",
+                     "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"],
+                    check=True, timeout=60,
+                )
+                os.chmod("/usr/local/bin/cloudflared", 0o755)
+                cf_bin = "/usr/local/bin/cloudflared"
+                print(f"✓ cloudflared installed to {cf_bin}")
+            except Exception as e:
+                print(f"✕ Failed to install cloudflared: {e}")
+                return None
 
-    elif provider == "cloudflared":
         try:
-            import subprocess
+            print("Starting cloudflared tunnel (no splash page)...")
             proc = subprocess.Popen(
-                ["cloudflared", "tunnel", "--url", f"http://localhost:{port}"],
+                [cf_bin, "tunnel", "--url", f"http://localhost:{port}", "--no-autoupdate"],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 universal_newlines=True,
             )
-            # Wait for tunnel URL
             for line in proc.stdout:
-                if "https://" in line and "trycloudflare.com" in line:
-                    import re
+                if "trycloudflare.com" in line:
                     match = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", line)
                     if match:
-                        print(f"✓ cloudflared tunnel established: {match.group(0)}")
-                        break
-        except FileNotFoundError:
-            print("✕ cloudflared not installed. Install with: pip install cloudflared")
+                        url = match.group(0)
+                        print(f"\n✓ cloudflared tunnel established: {url}\n")
+                        return url
+                    # Fallback: extract just the hostname
+                    match = re.search(r"[a-z0-9-]+\.trycloudflare\.com", line)
+                    if match:
+                        url = f"https://{match.group(0)}"
+                        print(f"\n✓ cloudflared tunnel established: {url}\n")
+                        return url
         except Exception as e:
             print(f"✕ cloudflared tunnel failed: {e}")
+            return None
 
     elif provider == "localtunnel":
+        if not shutil.which("lt"):
+            print("Installing localtunnel...")
+            try:
+                subprocess.run(
+                    ["npm", "install", "-g", "localtunnel"],
+                    check=True, timeout=120,
+                )
+            except Exception as e:
+                print(f"✕ Failed to install localtunnel: {e}")
+                return None
+
         try:
-            import subprocess
-            print("Starting localtunnel process...")
+            print("Starting localtunnel...")
             proc = subprocess.Popen(
                 ["lt", "--port", str(port)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 universal_newlines=True,
             )
-            print("localtunnel process started, waiting for URL...")
             for line in proc.stdout:
-                print(f"[localtunnel] {line.rstrip()}")  # Log all output
-                # Match any https URL from localtunnel
-                if "https://" in line:
-                    import re
-                    # Try to extract URL
+                if "https://" in line and ("loca.lt" in line or "localtunnel" in line):
                     match = re.search(r"https://[^\s)]+", line)
                     if match:
                         url = match.group(0).rstrip()
                         print(f"\n✓ localtunnel established: {url}\n")
-                        break
-        except FileNotFoundError:
-            print("✕ localtunnel not installed. Install with: npm install -g localtunnel")
+                        return url
         except Exception as e:
             print(f"✕ localtunnel failed: {e}")
-            import traceback
-            traceback.print_exc()
+            return None
+
+    elif provider == "ngrok":
+        try:
+            from pyngrok import ngrok
+            tunnel = ngrok.connect(port, "http")
+            print(f"\n✓ ngrok tunnel established: {tunnel.public_url}\n")
+            return tunnel.public_url
+        except ImportError:
+            print(" pyngrok not installed. Install with: pip install pyngrok")
+            return None
+        except Exception as e:
+            print(f"✕ ngrok tunnel failed: {e}")
+            return None
+
+    elif provider == "kaggle":
+        # Kaggle port forwarding doesn't need a tunnel; just prints instructions
+        print(f"\n✓ Kaggle mode: Add port {port} in the right sidebar")
+        print(f"  Then click the generated URL to open the UI\n")
+        return None
 
     else:
         print(f"✕ Unknown tunnel provider: {provider}")
-        print("  Supported: ngrok, cloudflared, localtunnel")
+        return None

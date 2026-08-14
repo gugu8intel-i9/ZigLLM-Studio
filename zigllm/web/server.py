@@ -352,11 +352,13 @@ def _start_tunnel(provider, port):
                 universal_newlines=True,
             )
             for line in proc.stdout:
-                if "https://" in line and "localtunnel.me" in line:
+                # Match any https URL from localtunnel (supports both loca.lt and localtunnel.me)
+                if "https://" in line and ("loca.lt" in line or "localtunnel" in line):
                     import re
-                    match = re.search(r"https://[a-z0-9-]+\.localtunnel\.me", line)
+                    match = re.search(r"https://[^\s]+", line)
                     if match:
-                        print(f"✓ localtunnel established: {match.group(0)}")
+                        url = match.group(0).rstrip()
+                        print(f"✓ localtunnel established: {url}")
                         break
         except FileNotFoundError:
             print("✕ localtunnel not installed. Install with: npm install -g localtunnel")

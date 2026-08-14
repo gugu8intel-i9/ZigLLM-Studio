@@ -40,7 +40,7 @@ def main():
     args=p.parse_args()
 
     if args.command=="gui":
-        from .gui import launch; launch()
+        from .web.server import launch; launch()
     elif args.command=="build-core":
         import subprocess; subprocess.run(["zig","build","-Doptimize=ReleaseFast"],check=True)
     elif args.command=="scrape":

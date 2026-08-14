@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZigLLM Studio</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --bg:#000; --surface:#111; --surface2:#1a1a1a; --line:#292929;
+  --ink:#f5f5f5; --muted:#888; --dim:#555;
+  --accent:#fff; --accent-bg:#fff; --accent-fg:#000;
+  --danger:#ff6b6b; --success:#6bff8a;
+}
+body {
+  background:var(--bg); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  line-height:1.5; min-height:100vh;
+}
+a { color:#7cb3ff; }
+#app { max-width:1400px; margin:0 auto; padding:0 5vw 40px; }
+
+/* Hero */
+#hero { padding:34px 0 24px; border-bottom:1px solid var(--line); margin-bottom:26px; }
+#hero h1 { font-size:38px; font-weight:600; letter-spacing:-1.5px; margin-bottom:8px; }
+#hero p { color:var(--muted); font-size:15px; }
+.badges { display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; }
+.badge { display:inline-block; padding:4px 9px; border-radius:4px; font-size:11px; background:#171717; color:#cfcfcf; border:1px solid #333; }
+
+/* Tabs */
+#tabs { display:flex; gap:0; border-bottom:1px solid var(--line); margin-bottom:24px; overflow-x:auto; }
+.tab-btn {
+  padding:10px 18px; background:none; border:none; color:#777; font-size:14px; cursor:pointer;
+  border-bottom:2px solid transparent; white-space:nowrap;
+}
+.tab-btn:hover { color:#ccc; }
+.tab-btn.active { color:#fff; border-bottom-color:#fff; }
+.tab-panel { display:none; }
+.tab-panel.active { display:block; }
+
+/* Cards / sections */
+.card {
+  border:1px solid var(--line); border-radius:10px; padding:18px; background:var(--surface);
+  margin-bottom:16px;
+}
+.card h3 { font-size:14px; font-weight:600; color:#fff; margin-bottom:12px; }
+.card h4 { font-size:13px; font-weight:600; color:#ddd; margin:12px 0 8px; }
+
+/* Grid layouts */
+.row { display:flex; gap:12px; }
+.row > * { flex:1; }
+.row-7-5 > *:first-child { flex:7; }
+.row-7-5 > *:last-child { flex:5; }
+
+/* Form elements */
+label { display:block; color:#aaa; font-size:13px; margin-bottom:4px; }
+label .hint { color:var(--dim); font-size:11px; font-weight:normal; }
+input[type="text"], input[type="number"], textarea, select {
+  width:100%; background:#080808; border:1px solid #303030; border-radius:6px;
+  color:var(--ink); padding:8px 10px; font-size:14px; font-family:inherit;
+  transition:border-color .15s;
+}
+input:focus, textarea:focus, select:focus {
+  outline:none; border-color:#777; box-shadow:0 0 0 1px #777;
+}
+textarea { resize:vertical; }
+select { cursor:pointer; }
+select option { background:#111; color:#f5f5f5; }
+
+/* Checkbox */
+.chk { display:flex; align-items:center; gap:8px; padding:6px 0; cursor:pointer; }
+.chk input[type="checkbox"] { width:16px; height:16px; accent-color:#fff; cursor:pointer; }
+.chk .chk-label { color:#ccc; font-size:13px; }
+.chk .chk-hint { color:var(--dim); font-size:11px; display:block; }
+
+/* Range slider */
+input[type="range"] {
+  -webkit-appearance:none; width:100%; height:4px; background:#303030; border-radius:2px; outline:none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance:none; width:16px; height:16px; background:#fff; border-radius:50%; cursor:pointer;
+}
+.slider-row { display:flex; align-items:center; gap:10px; }
+.slider-row input[type="range"] { flex:1; }
+.slider-row .slider-val { color:var(--ink); font-size:13px; min-width:48px; text-align:right; }
+
+/* Buttons */
+button {
+  padding:10px 20px; border-radius:8px; border:none; font-size:14px; font-weight:600;
+  cursor:pointer; transition:background .15s; font-family:inherit;
+}
+.btn-primary { background:var(--accent-bg); color:var(--accent-fg); }
+.btn-primary:hover { background:#d8d8d8; }
+.btn-secondary { background:var(--surface2); color:var(--ink); border:1px solid var(--line); }
+.btn-secondary:hover { background:#2a2a2a; }
+.btn-row { display:flex; gap:10px; margin:12px 0; }
+
+/* Log / output */
+.log {
+  background:#080808; border:1px solid var(--line); border-radius:6px; padding:12px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px;
+  color:#d0d0d0; white-space:pre-wrap; word-break:break-word; min-height:80px;
+  max-height:400px; overflow-y:auto; line-height:1.6;
+}
+.log.success { border-color:#2a5a2a; }
+.log.error { border-color:#5a2a2a; color:#ff9999; }
+
+/* Accordion */
+.accordion { border:1px solid var(--line); border-radius:6px; margin-bottom:8px; overflow:hidden; }
+.accordion-header {
+  padding:10px 14px; background:var(--surface2); cursor:pointer; font-size:13px; font-weight:600;
+  color:#ccc; display:flex; justify-content:space-between; align-items:center;
+}
+.accordion-header:hover { background:#252525; }
+.accordion-header::after { content:"▸"; transition:transform .2s; }
+.accordion.open .accordion-header::after { transform:rotate(90deg); }
+.accordion-body { display:none; padding:14px; }
+.accordion.open .accordion-body { display:block; }
+
+/* Search results */
+.search-result {
+  padding:12px 14px; border-bottom:1px solid #1a1a1a; cursor:pointer; transition:background .15s;
+}
+.search-result:hover { background:#1a1a1a; }
+.search-result:last-child { border-bottom:none; }
+.search-id { color:#fff; font-weight:600; font-size:14px; }
+.search-meta { color:#777; font-size:12px; margin-top:2px; }
+.search-desc { color:#999; font-size:12px; margin-top:4px; }
+
+/* Spinner */
+.spinner {
+  display:inline-block; width:16px; height:16px; border:2px solid #555; border-top-color:#fff;
+  border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; margin-right:8px;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* Dataset preview */
+.ds-sample { padding:8px 0; border-bottom:1px solid #1a1a1a; }
+.ds-sample:last-child { border-bottom:none; }
+.ds-sample .text { color:var(--ink); font-size:13px; }
+.ds-sample .meta { color:var(--dim); font-size:11px; margin-top:2px; }
+
+/* Responsive */
+@media (max-width:768px) {
+  .row { flex-direction:column; }
+  #hero h1 { font-size:28px; }
+}
+
+/* Utility */
+.muted { color:var(--muted); }
+.small { font-size:12px; }
+.mt { margin-top:12px; }
+.mb { margin-bottom:12px; }
+.gap { gap:12px; }
+.perf-pill { display:inline-block; padding:2px 8px; border-radius:3px; font-size:11px; margin-right:4px; background:#1a1a1a; color:#aaa; border:1px solid #292929; }
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- Hero -->
+<div id="hero">
+  <h1>ZigLLM Studio</h1>
+  <p>Train, fine-tune, and evaluate language models visually — optimized for Kaggle and Google Colab.</p>
+  <div class="badges">
+    <span class="badge">Zig core</span>
+    <span class="badge">LoRA / QLoRA</span>
+    <span class="badge">Flash Attention</span>
+    <span class="badge">Dataset Browser</span>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div id="tabs">
+  <button class="tab-btn active" data-tab="training">Training</button>
+  <button class="tab-btn" data-tab="browser">Dataset Browser</button>
+  <button class="tab-btn" data-tab="datatools">Data tools</button>
+  <button class="tab-btn" data-tab="create">Create Dataset</button>
+  <button class="tab-btn" data-tab="system">System</button>
+  <button class="tab-btn" data-tab="benchmarks">Benchmarks</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- TAB: Training -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="tab-panel active" id="panel-training">
+  <div class="row row-7-5">
+    <div class="card">
+      <h3>01 · Model setup</h3>
+      <label>Model checkpoint <span class="hint">Compatible Hugging Face checkpoint</span></label>
+      <input type="text" id="t-model" value="Qwen/Qwen2.5-0.5B">
+      <div class="row" style="margin-top:12px">
+        <div>
+          <label>Architecture</label>
+          <select id="t-arch">
+            <option value="transformer" selected>transformer</option>
+            <option value="looped_transformer">looped_transformer</option>
+            <option value="mamba">mamba</option>
+          </select>
+        </div>
+        <div>
+          <label>Run mode</label>
+          <select id="t-mode">
+            <option value="finetune" selected>finetune</option>
+            <option value="train">train</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>02 · Compute strategy</h3>
+      <label>Memory strategy</label>
+      <select id="t-adapter">
+        <option value="full">full</option>
+        <option value="lora" selected>lora</option>
+        <option value="qlora">qlora</option>
+      </select>
+      <label style="margin-top:12px">Device</label>
+      <select id="t-device">
+        <option value="auto" selected>auto</option>
+        <option value="cuda">cuda</option>
+        <option value="cpu">cpu</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>03 · Data source</h3>
+    <p class="muted small mb">Use the <strong>Dataset Browser</strong> tab to search and pick datasets, or type an ID directly.</p>
+    <div class="row">
+      <div>
+        <label>Provider</label>
+        <select id="t-provider">
+          <option value="huggingface" selected>huggingface</option>
+          <option value="kaggle">kaggle</option>
+          <option value="local">local</option>
+        </select>
+      </div>
+      <div style="flex:2">
+        <label>Dataset ID</label>
+        <input type="text" id="t-dataset" placeholder="dataset/name or owner/dataset">
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div>
+        <label>Split</label>
+        <input type="text" id="t-split" value="train">
+      </div>
+      <div>
+        <label>Text column</label>
+        <input type="text" id="t-column" value="text">
+      </div>
+    </div>
+  </div>
+
+  <div class="accordion">
+    <div class="accordion-header" onclick="toggleAccordion(this)">Advanced training controls</div>
+    <div class="accordion-body">
+      <div class="row">
+        <div>
+          <label>Sequence length</label>
+          <input type="number" id="t-seq" value="1024">
+        </div>
+        <div>
+          <label>Micro-batch</label>
+          <input type="number" id="t-batch" value="1">
+        </div>
+        <div>
+          <label>Grad accumulation</label>
+          <input type="number" id="t-accum" value="8">
+        </div>
+        <div>
+          <label>Epochs</label>
+          <input type="number" id="t-epochs" value="1" step="0.1">
+        </div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div>
+          <label>Learning rate</label>
+          <input type="number" id="t-lr" value="0.0002" step="0.0001">
+        </div>
+        <div>
+          <label>LoRA rank</label>
+          <input type="number" id="t-rank" value="16">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>⚡ Performance tuning</h3>
+    <div class="mb"><span class="perf-pill">Flash Attn</span><span class="perf-pill">Grad Checkpointing</span><span class="perf-pill">torch.compile</span><span class="perf-pill">Streaming</span></div>
+    <div class="row">
+      <div>
+        <label class="chk"><input type="checkbox" id="t-flash" checked><span class="chk-label">Flash Attention 2 / SDPA</span><span class="chk-hint">2-4x faster attention, lower VRAM</span></label>
+      </div>
+      <div>
+        <label class="chk"><input type="checkbox" id="t-grad-ckpt"><span class="chk-label">Gradient checkpointing</span><span class="chk-hint">Save ~40% VRAM at ~20% compute cost</span></label>
+      </div>
+      <div>
+        <label class="chk"><input type="checkbox" id="t-compile"><span class="chk-label">torch.compile()</span><span class="chk-hint">Kernel fusion 10-30% speedup</span></label>
+      </div>
+      <div>
+        <label class="chk"><input type="checkbox" id="t-stream"><span class="chk-label">Stream dataset</span><span class="chk-hint">For large datasets, low RAM</span></label>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div>
+        <label>DataLoader workers <span class="hint" id="t-workers-val">2</span></label>
+        <div class="slider-row">
+          <input type="range" id="t-workers" min="0" max="16" value="2" step="1" oninput="document.getElementById('t-workers-val').textContent=this.value">
+        </div>
+      </div>
+      <div>
+        <label>Warmup ratio <span class="hint" id="t-warmup-val">0.03</span></label>
+        <div class="slider-row">
+          <input type="range" id="t-warmup" min="0" max="0.3" value="0.03" step="0.01" oninput="document.getElementById('t-warmup-val').textContent=parseFloat(this.value).toFixed(2)">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-primary" onclick="startTraining()" id="btn-train">▶ Validate & start training</button>
+  </div>
+  <label>Live job log</label>
+  <div class="log" id="t-log">Waiting to start...</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- TAB: Dataset Browser -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="panel-browser">
+  <div class="card">
+    <h3>🔍 Search Hugging Face Datasets</h3>
+    <p class="muted small mb">Browse and search any public dataset on huggingface.co/datasets. Click a result to use it in Training.</p>
+    <div class="row">
+      <div style="flex:3">
+        <label>Search query</label>
+        <input type="text" id="b-query" placeholder="e.g. code, math, medical, alpaca, instruction…">
+      </div>
+      <div>
+        <label>Sort by</label>
+        <select id="b-sort">
+          <option value="downloads" selected>downloads</option>
+          <option value="likes">likes</option>
+          <option value="trending">trending</option>
+          <option value="lastModified">lastModified</option>
+          <option value="createdAt">createdAt</option>
+        </select>
+      </div>
+      <div>
+        <label>Results <span class="hint" id="b-limit-val">20</span></label>
+        <div class="slider-row">
+          <input type="range" id="b-limit" min="5" max="100" value="20" step="5" oninput="document.getElementById('b-limit-val').textContent=this.value">
+        </div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div>
+        <label>Task</label>
+        <select id="b-task">
+          <option value="" selected>all</option>
+          <option value="text-generation">text-generation</option>
+          <option value="text-classification">text-classification</option>
+          <option value="token-classification">token-classification</option>
+          <option value="question-answering">question-answering</option>
+          <option value="summarization">summarization</option>
+          <option value="translation">translation</option>
+          <option value="fill-mask">fill-mask</option>
+          <option value="sentence-similarity">sentence-similarity</option>
+        </select>
+      </div>
+      <div>
+        <label>Language</label>
+        <input type="text" id="b-lang" placeholder="e.g. en, code, fr">
+      </div>
+      <div>
+        <label>Author</label>
+        <input type="text" id="b-author" placeholder="e.g. tiiuae">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-primary" onclick="searchDatasets()">🔍 Search datasets</button>
+    </div>
+    <label>Results</label>
+    <div id="b-results" class="mb">Search for datasets to see results here.</div>
+    <label>Selected dataset ID</label>
+    <input type="text" id="b-selected" readonly placeholder="Click a result to fill">
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- TAB: Data tools -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="panel-datatools">
+  <div class="card">
+    <h3>CSV → optimized Parquet</h3>
+    <p class="muted small mb">Stream large CSV exports into compressed, columnar Parquet without loading the entire file into memory.</p>
+    <label>CSV input path</label>
+    <input type="text" id="c-csv" placeholder="/path/to/input.csv">
+    <div class="row" style="margin-top:12px">
+      <div>
+        <label>Output path</label>
+        <input type="text" id="c-out" value="dataset.parquet">
+      </div>
+      <div>
+        <label>Compression</label>
+        <select id="c-comp">
+          <option value="zstd" selected>zstd</option>
+          <option value="snappy">snappy</option>
+          <option value="gzip">gzip</option>
+          <option value="brotli">brotli</option>
+          <option value="none">none</option>
+        </select>
+      </div>
+      <div>
+        <label>Read block size</label>
+        <input type="number" id="c-batch" value="100000">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-primary" onclick="convertCsv()">Convert to Parquet</button>
+    </div>
+    <label>Conversion result</label>
+    <div class="log" id="c-log">Ready.</div>
+  </div>
+
+  <div class="card">
+    <h3>Public web scraper</h3>
+    <div class="row">
+      <div>
+        <label>Page URL</label>
+        <input type="text" id="s-url" placeholder="https://example.org/article">
+      </div>
+      <div>
+        <label>CSS selector (optional)</label>
+        <input type="text" id="s-selector" placeholder="article p">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="scrapePage()">Scrape page</button>
+    </div>
+    <label>Extracted text</label>
+    <div class="log" id="s-log">Ready.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- TAB: Create Dataset -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="panel-create">
+  <div class="card">
+    <h3>🛠️ Build Your Own Training Dataset</h3>
+    <p class="muted small mb">Collect text from multiple sources, clean it, and export in a format ready for training.</p>
+
+    <div class="row row-7-5">
+      <div>
+        <h4>📥 Input Sources</h4>
+        <div class="accordion open">
+          <div class="accordion-header" onclick="toggleAccordion(this)">Text Input</div>
+          <div class="accordion-body">
+            <label>Paste text <span class="hint">one sample per line</span></label>
+            <textarea id="cd-text" rows="8" placeholder="The quick brown fox...&#10;Another sample...&#10;Yet another..."></textarea>
+          </div>
+        </div>
+        <div class="accordion">
+          <div class="accordion-header" onclick="toggleAccordion(this)">File Upload (comma-separated paths)</div>
+          <div class="accordion-body">
+            <label>File paths <span class="hint">.txt, .md, .json, .jsonl — long files auto-split</span></label>
+            <input type="text" id="cd-files" placeholder="/path/to/file1.txt, /path/to/file2.jsonl">
+          </div>
+        </div>
+        <div class="accordion">
+          <div class="accordion-header" onclick="toggleAccordion(this)">Web Scraping</div>
+          <div class="accordion-body">
+            <label>URLs <span class="hint">one per line, public pages only</span></label>
+            <textarea id="cd-urls" rows="5" placeholder="https://example.com/page1&#10;https://example.com/page2"></textarea>
+            <label style="margin-top:12px">CSS selector (optional)</label>
+            <input type="text" id="cd-selector" placeholder="article p">
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h4>️ Configuration</h4>
+        <label>Dataset name</label>
+        <input type="text" id="cd-name" value="my-dataset">
+        <label style="margin-top:12px">Output path</label>
+        <input type="text" id="cd-output" value="dataset.jsonl">
+        <label style="margin-top:12px">Format</label>
+        <select id="cd-format">
+          <option value="jsonl" selected>jsonl</option>
+          <option value="json">json</option>
+          <option value="parquet">parquet</option>
+        </select>
+
+        <div class="accordion">
+          <div class="accordion-header" onclick="toggleAccordion(this)">🧹 Cleaning Options</div>
+          <div class="accordion-body">
+            <label>Minimum chars <span class="hint" id="cd-min-val">40</span></label>
+            <div class="slider-row">
+              <input type="range" id="cd-min" min="0" max="1000" value="40" step="10" oninput="document.getElementById('cd-min-val').textContent=this.value">
+            </div>
+            <label style="margin-top:12px">Maximum chars <span class="hint" id="cd-max-val">0</span></label>
+            <div class="slider-row">
+              <input type="range" id="cd-max" min="0" max="10000" value="0" step="100" oninput="document.getElementById('cd-max-val').textContent=this.value">
+            </div>
+            <label class="chk mt"><input type="checkbox" id="cd-dedupe" checked><span class="chk-label">Remove duplicates</span></label>
+          </div>
+        </div>
+
+        <div class="accordion">
+          <div class="accordion-header" onclick="toggleAccordion(this)">📊 Train/Val/Test Splits</div>
+          <div class="accordion-body">
+            <p class="muted small">Ratios should sum to ~1.0</p>
+            <label>Train <span class="hint" id="cd-strain-val">0.90</span></label>
+            <div class="slider-row"><input type="range" id="cd-strain" min="0.5" max="1" value="0.9" step="0.05" oninput="document.getElementById('cd-strain-val').textContent=parseFloat(this.value).toFixed(2)"></div>
+            <label style="margin-top:12px">Validation <span class="hint" id="cd-sval-val">0.05</span></label>
+            <div class="slider-row"><input type="range" id="cd-sval" min="0" max="0.3" value="0.05" step="0.05" oninput="document.getElementById('cd-sval-val').textContent=parseFloat(this.value).toFixed(2)"></div>
+            <label style="margin-top:12px">Test <span class="hint" id="cd-stest-val">0.05</span></label>
+            <div class="slider-row"><input type="range" id="cd-stest" min="0" max="0.3" value="0.05" step="0.05" oninput="document.getElementById('cd-stest-val').textContent=parseFloat(this.value).toFixed(2)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-secondary" onclick="previewDataset()">👁️ Preview Samples</button>
+      <button class="btn-primary" onclick="buildDataset()"> Build Dataset</button>
+    </div>
+
+    <label>Preview</label>
+    <div class="log" id="cd-preview-log">Ready.</div>
+    <label style="margin-top:12px">Build Log</label>
+    <div class="log" id="cd-build-log">Ready.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- TAB: System -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="panel-system">
+  <div class="card">
+    <h3>Zig core</h3>
+    <p class="muted small mb">Compile the dependency-free Zig acceleration library with ReleaseFast settings.</p>
+    <div class="btn-row">
+      <button class="btn-primary" onclick="buildCore()">Build Zig core</button>
+    </div>
+    <label>Build log</label>
+    <div class="log" id="sys-log">Ready.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- TAB: Benchmarks -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="panel-benchmarks">
+  <div class="card">
+    <h3>Evaluate a checkpoint</h3>
+    <p class="muted small mb">Run standard scoring tasks, or get the harness command for agent benchmarks.</p>
+    <div class="row">
+      <div>
+        <label>Model checkpoint</label>
+        <input type="text" id="bm-model" value="Qwen/Qwen2.5-0.5B">
+      </div>
+      <div>
+        <label>Benchmark</label>
+        <select id="bm-name">
+          <option value="hellaswag" selected>HellaSwag</option>
+          <option value="gmsk8">GMSK8 / GSM8K</option>
+          <option value="swe">SWE-bench</option>
+          <option value="hle">HLE</option>
+          <option value="cybergym">CyberGym</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div>
+        <label>Device</label>
+        <select id="bm-device">
+          <option value="auto" selected>auto</option>
+          <option value="cuda">cuda</option>
+          <option value="cpu">cpu</option>
+        </select>
+      </div>
+      <div>
+        <label>Sample limit <span class="hint">0 = full</span></label>
+        <input type="number" id="bm-limit" value="0">
+      </div>
+    </div>
+    <p class="muted small mt"><strong>Available:</strong> SWE-bench · GMSK8/GSM8K · HLE · CyberGym · HellaSwag</p>
+    <div class="btn-row">
+      <button class="btn-primary" onclick="runBenchmark()">Run benchmark</button>
+    </div>
+    <label>Benchmark result / harness log</label>
+    <div class="log" id="bm-log">Ready.</div>
+  </div>
+</div>
+
+</div><!-- /#app -->
+
+<script>
+// ── Tab switching ─────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ── Accordion toggle ──────────────────────────────────────────────
+function toggleAccordion(header) {
+  header.parentElement.classList.toggle('open');
+}
+
+// ── API helper ────────────────────────────────────────────────────
+async function api(path, body = null) {
+  const opts = { method: body ? 'POST' : 'GET', headers: {'Content-Type':'application/json'} };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || 'API error');
+  return j;
+}
+
+function setLog(el, msg, cls) {
+  el.textContent = msg;
+  el.className = 'log' + (cls ? ' ' + cls : '');
+}
+
+// ── Training ──────────────────────────────────────────────────────
+async function startTraining() {
+  const btn = document.getElementById('btn-train');
+  const log = document.getElementById('t-log');
+  btn.disabled = true; btn.textContent = '⏳ Starting...';
+  setLog(log, 'Launching training job...\n');
+
+  try {
+    const body = {
+      model_id: document.getElementById('t-model').value,
+      architecture: document.getElementById('t-arch').value,
+      mode: document.getElementById('t-mode').value,
+      adapter: document.getElementById('t-adapter').value,
+      device: document.getElementById('t-device').value,
+      provider: document.getElementById('t-provider').value,
+      dataset_id: document.getElementById('t-dataset').value,
+      dataset_split: document.getElementById('t-split').value,
+      text_column: document.getElementById('t-column').value,
+      seq_len: document.getElementById('t-seq').value,
+      batch_size: document.getElementById('t-batch').value,
+      grad_accum: document.getElementById('t-accum').value,
+      epochs: document.getElementById('t-epochs').value,
+      learning_rate: document.getElementById('t-lr').value,
+      lora_rank: document.getElementById('t-rank').value,
+      gradient_checkpointing: document.getElementById('t-grad-ckpt').checked,
+      flash_attention: document.getElementById('t-flash').checked,
+      torch_compile: document.getElementById('t-compile').checked,
+      num_workers: document.getElementById('t-workers').value,
+      warmup_ratio: document.getElementById('t-warmup').value,
+      streaming: document.getElementById('t-stream').checked,
+    };
+    const { job_id } = await api('/api/train', body);
+    setLog(log, `Job ${job_id} started. Polling logs...\n`);
+    pollLogs(job_id, log, btn);
+  } catch (e) {
+    setLog(log, '✕ ERROR: ' + e.message, 'error');
+    btn.disabled = false; btn.textContent = '▶ Validate & start training';
+  }
+}
+
+function pollLogs(jobId, el, btn) {
+  const poll = async () => {
+    const { logs, done } = await api('/api/job/' + jobId);
+    el.textContent = logs.map(l => l.m).join('\n');
+    if (!done) { setTimeout(poll, 1000); }
+    else {
+      btn.disabled = false; btn.textContent = '▶ Validate & start training';
+      el.classList.add(logs.some(l => l.m.startsWith('✕')) ? 'error' : 'success');
+    }
+  };
+  poll();
+}
+
+// ── Dataset browser ───────────────────────────────────────────────
+async function searchDatasets() {
+  const el = document.getElementById('b-results');
+  el.innerHTML = '<span class="spinner"></span>Searching...';
+  try {
+    const { results } = await api('/api/search-datasets', {
+      query: document.getElementById('b-query').value,
+      sort: document.getElementById('b-sort').value,
+      limit: document.getElementById('b-limit').value,
+      task: document.getElementById('b-task').value,
+      language: document.getElementById('b-lang').value,
+      author: document.getElementById('b-author').value,
+    });
+    if (!results.length) { el.innerHTML = 'No datasets found.'; return; }
+    el.innerHTML = results.map(r => `
+      <div class="search-result" onclick="document.getElementById('b-selected').value='${r.id}';document.getElementById('t-dataset').value='${r.id}'">
+        <div class="search-id">${r.id}</div>
+        <div class="search-meta">↓ ${r.downloads.toLocaleString()} &nbsp; ❤ ${r.likes} &nbsp; | &nbsp; ${r.tags.join(', ') || '—'}</div>
+        ${r.description ? `<div class="search-desc">${r.description}</div>` : ''}
+      </div>
+    `).join('');
+    document.getElementById('b-selected').value = results[0].id;
+  } catch (e) { el.innerHTML = '✕ ERROR: ' + e.message; }
+}
+
+// ── CSV to parquet ────────────────────────────────────────────────
+async function convertCsv() {
+  const log = document.getElementById('c-log');
+  setLog(log, 'Converting...');
+  try {
+    const { result } = await api('/api/convert-csv', {
+      input: document.getElementById('c-csv').value,
+      output: document.getElementById('c-out').value,
+      compression: document.getElementById('c-comp').value,
+      batch_size: document.getElementById('c-batch').value,
+    });
+    setLog(log, `✓ Converted\n  Input: ${result.input}\n  Output: ${result.output}\n  Rows: ${result.rows}\n  Batches: ${result.batches}\n  Compression: ${result.compression}`, 'success');
+  } catch (e) { setLog(log, '✕ ERROR: ' + e.message, 'error'); }
+}
+
+// ── Scrape ────────────────────────────────────────────────────────
+async function scrapePage() {
+  const log = document.getElementById('s-log');
+  setLog(log, 'Scraping...');
+  try {
+    const { count, texts } = await api('/api/scrape', {
+      url: document.getElementById('s-url').value,
+      selector: document.getElementById('s-selector').value,
+    });
+    setLog(log, `✓ Extracted ${count} text blocks\n\n${texts.join('\n\n')}`, 'success');
+  } catch (e) { setLog(log, '✕ ERROR: ' + e.message, 'error'); }
+}
+
+// ── Create dataset ────────────────────────────────────────────────
+async function previewDataset() {
+  const log = document.getElementById('cd-preview-log');
+  setLog(log, 'Previewing...');
+  try {
+    const { count, preview } = await api('/api/create-dataset/preview', {
+      name: document.getElementById('cd-name').value,
+      text: document.getElementById('cd-text').value,
+      files: document.getElementById('cd-files').value ? document.getElementById('cd-files').value.split(',').map(s => s.trim()) : [],
+      urls: document.getElementById('cd-urls').value,
+      selector: document.getElementById('cd-selector').value,
+      dedupe: document.getElementById('cd-dedupe').checked,
+      min_chars: document.getElementById('cd-min').value,
+      max_chars: document.getElementById('cd-max').value,
+    });
+    let txt = `Preview of first ${Math.min(preview.length, count)} samples (${count} total):\n\n`;
+    preview.forEach((s, i) => {
+      const t = s.text.length > 200 ? s.text.slice(0,200) + '...' : s.text;
+      txt += `${i+1}. ${t}\n   Source: ${s.source}  Length: ${t.length} chars\n\n`;
+    });
+    setLog(log, txt);
+  } catch (e) { setLog(log, '✕ ERROR: ' + e.message, 'error'); }
+}
+
+async function buildDataset() {
+  const log = document.getElementById('cd-build-log');
+  setLog(log, 'Building...');
+  try {
+    const { result } = await api('/api/create-dataset/build', {
+      name: document.getElementById('cd-name').value,
+      output: document.getElementById('cd-output').value,
+      format: document.getElementById('cd-format').value,
+      text: document.getElementById('cd-text').value,
+      files: document.getElementById('cd-files').value ? document.getElementById('cd-files').value.split(',').map(s => s.trim()) : [],
+      urls: document.getElementById('cd-urls').value,
+      selector: document.getElementById('cd-selector').value,
+      dedupe: document.getElementById('cd-dedupe').checked,
+      min_chars: document.getElementById('cd-min').value,
+      max_chars: document.getElementById('cd-max').value,
+      split_train: document.getElementById('cd-strain').value,
+      split_val: document.getElementById('cd-sval').value,
+      split_test: document.getElementById('cd-stest').value,
+    });
+    let txt = `✓ Dataset created successfully!\n  Output: ${result.output}\n  Samples: ${result.samples}\n  Format: ${result.format}\n  Metadata: ${result.metadata}`;
+    if (result.removed && Object.values(result.removed).some(v => v > 0)) {
+      txt += `\n  Removed: ${JSON.stringify(result.removed)}`;
+    }
+    if (result.splits) {
+      txt += `\n  Splits: ${JSON.stringify(result.splits)}`;
+    }
+    setLog(log, txt, 'success');
+  } catch (e) { setLog(log, '✕ ERROR: ' + e.message, 'error'); }
+}
+
+// ── Build core ────────────────────────────────────────────────────
+async function buildCore() {
+  const log = document.getElementById('sys-log');
+  setLog(log, 'Building...');
+  try {
+    const { log: buildLog } = await api('/api/build-core', {});
+    setLog(log, buildLog, 'success');
+  } catch (e) { setLog(log, '✕ ERROR: ' + e.message, 'error'); }
+}
+
+// ── Benchmark ─────────────────────────────────────────────────────
+async function runBenchmark() {
+  const log = document.getElementById('bm-log');
+  setLog(log, 'Running...');
+  try {
+    const { result } = await api('/api/benchmark', {
+      name: document.getElementById('bm-name').value,
+      model_id: document.getElementById('bm-model').value,
+      device: document.getElementById('bm-device').value,
+      limit: document.getElementById('bm-limit').value,
+    });
+    setLog(log, result, 'success');
+  } catch (e) { setLog(log, '✕ ERROR: ' + e.message, 'error'); }
+}
+
+// ── Health check on load ──────────────────────────────────────────
+(async () => {
+  try {
+    const h = await api('/api/health');
+    console.log('ZigLLM Studio connected:', h);
+  } catch (e) {
+    console.warn('Health check failed:', e);
+  }
+})();
+</script>
+</body>
+</html>

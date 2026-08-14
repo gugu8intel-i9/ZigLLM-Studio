@@ -4,43 +4,44 @@ A Kaggle/Google Colab-friendly LLM training control plane with a small, dependen
 
 ## Features
 
-- Gradio GUI for **train** or **fine-tune**, CPU/CUDA/auto selection.
+- **Pure HTML/Flask web UI** — no Gradio dependency, dark-themed, works in any browser. Training, evaluation, dataset browsing, and creation in one interface.
 - **Create custom datasets** from text, files, and web pages — available in GUI and CLI.
-- **Dataset Browser** — search and browse Hugging Face datasets directly from the GUI.
+- **Dataset Browser** — search and browse Hugging Face datasets directly from the UI (mirrors huggingface.co/datasets).
 - **Performance optimizations**: parallel tokenization, Flash Attention 2/SDPA, gradient checkpointing, torch.compile(), streaming datasets, optimized data loading.
 - Transformer, Looped Transformer and Mamba architecture choices. Transformer is native through `AutoModelForCausalLM`; Mamba and looped models accept compatible Hugging Face checkpoints and report when a specialized checkpoint is needed.
 - Full training, LoRA and QLoRA (4-bit bitsandbytes on CUDA).
 - Hugging Face dataset loading, Kaggle download support through `kagglehub`, local JSON/JSONL/CSV, and a polite public-page scraper.
 - Benchmark tab for SWE-bench, GMSK8/GSM8K, HLE, CyberGym, and HellaSwag. GSM8K and HellaSwag can run through `lm-eval`; the other evaluations expose their official harness path because they require patches, tool traces, licensed data, or a sandbox.
 - Streaming CSV → compressed Parquet conversion with PyArrow, exposed in both the GUI and CLI. It uses record batches and dictionary encoding for efficient dataset storage.
-- Every CLI utility is also exposed in the GUI: CSV conversion, public-page scraping, dataset creation, and ReleaseFast Zig-core builds.
 - The GUI automatically installs missing Python runtime packages. If QLoRA is selected with `device=auto` but the notebook has no CUDA GPU, it automatically falls back to LoRA instead of failing; QLoRA itself still requires CUDA.
 - Zig `ReleaseFast` shared library for stable config validation, token-step arithmetic, VRAM estimation, and training step calculation.
 
 ## Colab / Kaggle quick start
 
 ```python
-%cd /content
+%cd /kaggle/working
 !git clone https://github.com/gugu8intel-i9/ZigLLM-Studio.git zigllm
-%cd /content/zigllm
-!python -m pip install -e '.[train,data,bench]'
+%cd /kaggle/working/zigllm
+!python -m pip install -e '.[train,data,bench,web]'
 # Optional: install Zig separately for the ReleaseFast core build.
 # The Python training/UI layer does not require Zig to launch.
 !python -m pip install ziglang
 !zig version
 !zig build -Doptimize=ReleaseFast
-!zigllm gui
+!zigllm gui   # launches the web UI on http://localhost:7860
 ```
 
 If the repository was already cloned, do not run `git clone` again. Run:
 
 ```python
-%cd /content/zigllm
-!python -m pip install -e '.[train,data,bench]'
+%cd /kaggle/working/zigllm
+!python -m pip install -e '.[train,data,bench,web]'
 !zigllm gui
 ```
 
-Use a public tunnel supplied by the notebook environment if you need to access the Gradio UI remotely. In Kaggle, add Hugging Face/Kaggle credentials through the platform's secret manager, never in a notebook cell.
+Use a public tunnel supplied by the notebook environment if you need to access the UI remotely. In Kaggle, add Hugging Face/Kaggle credentials through the platform's secret manager, never in a notebook cell.
+
+**Note:** `zigllm gui` launches a Flask-based web UI (not Gradio) — no Gradio dependency required. All functionality is preserved with a cleaner, more reliable interface.
 
 ## Python API
 
@@ -143,6 +144,7 @@ cfg = RunConfig(
 - `zigllm/src/core.zig` builds without third-party Zig packages and is safe to compile for Linux x86_64 in notebook environments.
 - **Performance optimizations enabled by default**: parallel tokenization (multi-core), `DataCollatorForLanguageModeling` for dynamic padding, Flash Attention 2 / SDPA, fused AdamW optimizer, DataLoader workers with pinned memory and prefetching.
 - **Optional performance toggles** (configurable in GUI and API): gradient checkpointing (saves ~40% VRAM at ~20% compute), `torch.compile()` (10-30% speedup with kernel fusion), streaming datasets (for datasets too large for RAM).
+- **Web UI**: pure HTML + Flask, no Gradio dependency. All UI components use native CSS — no Gradio version-compatibility issues. Dark-themed, responsive, works in any browser.
 - Use bf16 where supported, gradient accumulation, fast tokenizers, and QLoRA for limited VRAM.
 - **Dataset Browser**: search any Hugging Face dataset from the GUI, filter by task/language/author, sort by downloads/likes/trending.
 - For real high-throughput production training, add FSDP or DeepSpeed and multi-GPU launch. This starter intentionally leaves those as explicit next steps rather than silently making unsafe distributed-training assumptions.

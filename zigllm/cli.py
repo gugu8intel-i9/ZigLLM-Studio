@@ -3,7 +3,9 @@ import argparse
 def main():
     p=argparse.ArgumentParser(prog="zigllm")
     sub=p.add_subparsers(dest="command",required=True)
-    sub.add_parser("gui",help="launch the Gradio UI")
+    gui=sub.add_parser("gui",help="launch the web UI")
+    gui.add_argument("--share", action="store_true", help="create a public tunnel (ngrok/cloudflared/localtunnel)")
+    gui.add_argument("--tunnel", default="ngrok", choices=["ngrok","cloudflared","localtunnel"], help="tunnel provider for --share")
     b=sub.add_parser("build-core",help="compile the Zig acceleration library")
     a=sub.add_parser("scrape"); a.add_argument("url"); a.add_argument("--selector")
     c=sub.add_parser("csv-to-parquet", help="stream-convert CSV to compressed Parquet")
@@ -40,7 +42,8 @@ def main():
     args=p.parse_args()
 
     if args.command=="gui":
-        from .web.server import launch; launch()
+        from .web.server import launch
+        launch(share=args.share, tunnel=args.tunnel)
     elif args.command=="build-core":
         import subprocess; subprocess.run(["zig","build","-Doptimize=ReleaseFast"],check=True)
     elif args.command=="scrape":

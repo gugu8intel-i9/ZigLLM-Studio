@@ -28,18 +28,39 @@ A Kaggle/Google Colab-friendly LLM training control plane with a small, dependen
 !python -m pip install ziglang
 !zig version
 !zig build -Doptimize=ReleaseFast
-!zigllm gui   # launches the web UI on http://localhost:7860
 ```
 
-If the repository was already cloned, do not run `git clone` again. Run:
+### Launching the UI
+
+**Option 1: Kaggle port forwarding (recommended, no setup)**
 
 ```python
-%cd /kaggle/working/zigllm
-!python -m pip install -e '.[train,data,bench,web]'
-!zigllm gui
+!zigllm gui &  # run in background
 ```
 
-Use a public tunnel supplied by the notebook environment if you need to access the UI remotely. In Kaggle, add Hugging Face/Kaggle credentials through the platform's secret manager, never in a notebook cell.
+Then in the Kaggle notebook sidebar, click **"Add port forwarding"** → add port **7860** → click the generated URL.
+
+**Option 2: Cloudflare tunnel (free, no account)**
+
+```python
+!zigllm gui --share --tunnel cloudflared
+```
+
+**Option 3: ngrok tunnel**
+
+```python
+!pip install pyngrok
+!zigllm gui --share --tunnel ngrok
+```
+
+**Option 4: localtunnel (free, no account)**
+
+```python
+!npm install -g localtunnel
+!zigllm gui --share --tunnel localtunnel
+```
+
+In Kaggle, add Hugging Face/Kaggle credentials through the platform's secret manager, never in a notebook cell.
 
 **Note:** `zigllm gui` launches a Flask-based web UI (not Gradio) — no Gradio dependency required. All functionality is preserved with a cleaner, more reliable interface.
 

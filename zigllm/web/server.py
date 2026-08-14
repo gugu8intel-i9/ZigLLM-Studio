@@ -262,14 +262,107 @@ def build_core():
         return jsonify({"ok": False, "error": "Zig is not installed"}), 400
 
 
-# ── Launch ──────────────────────────────────────────────────────────
-def launch(host="0.0.0.0", port=7860, share=False):
-    """Launch the web server.
+# ── Launch with tunnel support ──────────────────────────────────────
+def launch(host="0.0.0.0", port=7860, share=False, tunnel="ngrok"):
+    """Launch the web server with optional public tunnel.
 
-    For Colab/Kaggle share tunnels, use ngrok or similar. Gradio's share=
-    is not available with Flask.
+    Args:
+        host: Bind address (default: 0.0.0.0 for notebook environments)
+        port: Local port (default: 7860)
+        share: Create a public tunnel (default: False)
+        tunnel: Tunnel provider: "ngrok", "cloudflared", or "localtunnel" (default: "ngrok")
+
+    Examples:
+        # Basic launch (localhost only)
+        launch()
+
+        # With ngrok tunnel (requires pyngrok)
+        launch(share=True, tunnel="ngrok")
+
+        # With cloudflared tunnel (free, no account)
+        launch(share=True, tunnel="cloudflared")
+
+        # With localtunnel (free, no account)
+        launch(share=True, tunnel="localtunnel")
     """
     notebook = bool(os.environ.get("COLAB_RELEASE_TAG") or os.environ.get("KAGGLE_KERNEL_RUN_TYPE"))
     actual_host = "0.0.0.0" if notebook else host
+
+    if share and notebook:
+        print(f"Starting ZigLLM Studio on port {port} with {tunnel} tunnel...")
+        threading.Thread(
+            target=_start_tunnel,
+            args=(tunnel, port),
+            daemon=True,
+        ).start()
+    elif share:
+        print("⚠ share=True only works in notebook environments (Colab/Kaggle)")
+
     print(f"ZigLLM Studio web UI: http://localhost:{port}")
+    if share:
+        print("Tunnel URL will be printed once the tunnel is established...")
     app.run(host=actual_host, port=port, debug=False, use_reloader=False)
+
+
+def _start_tunnel(provider, port):
+    """Start a tunnel in a background thread."""
+    import time
+
+    if provider == "ngrok":
+        try:
+            from pyngrok import ngrok
+            tunnel = ngrok.connect(port, "http")
+            print(f"✓ ngrok tunnel established: {tunnel.public_url}")
+        except ImportError:
+            print("✕ pyngrok not installed. Install with: pip install pyngrok")
+            print("  Or set NGROK_AUTH_TOKEN env var with your ngrok token")
+            print("  Alternatively, use tunnel='cloudflared' or tunnel='localtunnel'")
+        except Exception as e:
+            print(f"✕ ngrok tunnel failed: {e}")
+
+    elif provider == "cloudflared":
+        try:
+            import subprocess
+            proc = subprocess.Popen(
+                ["cloudflared", "tunnel", "--url", f"http://localhost:{port}"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+            )
+            # Wait for tunnel URL
+            for line in proc.stdout:
+                if "https://" in line and "trycloudflare.com" in line:
+                    import re
+                    match = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", line)
+                    if match:
+                        print(f"✓ cloudflared tunnel established: {match.group(0)}")
+                        break
+        except FileNotFoundError:
+            print("✕ cloudflared not installed. Install with: pip install cloudflared")
+        except Exception as e:
+            print(f"✕ cloudflared tunnel failed: {e}")
+
+    elif provider == "localtunnel":
+        try:
+            import subprocess
+            proc = subprocess.Popen(
+                ["lt", "--port", str(port)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+            )
+            for line in proc.stdout:
+                if "https://" in line and "localtunnel.me" in line:
+                    import re
+                    match = re.search(r"https://[a-z0-9-]+\.localtunnel\.me", line)
+                    if match:
+                        print(f"✓ localtunnel established: {match.group(0)}")
+                        break
+        except FileNotFoundError:
+            print("✕ localtunnel not installed. Install with: npm install -g localtunnel")
+        except Exception as e:
+            print(f"✕ localtunnel failed: {e}")
+
+    else:
+        print(f"✕ Unknown tunnel provider: {provider}")
+        print("  Supported: ngrok, cloudflared, localtunnel")

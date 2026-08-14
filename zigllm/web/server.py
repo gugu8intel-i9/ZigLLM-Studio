@@ -345,25 +345,31 @@ def _start_tunnel(provider, port):
     elif provider == "localtunnel":
         try:
             import subprocess
+            print("Starting localtunnel process...")
             proc = subprocess.Popen(
                 ["lt", "--port", str(port)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 universal_newlines=True,
             )
+            print("localtunnel process started, waiting for URL...")
             for line in proc.stdout:
-                # Match any https URL from localtunnel (supports both loca.lt and localtunnel.me)
-                if "https://" in line and ("loca.lt" in line or "localtunnel" in line):
+                print(f"[localtunnel] {line.rstrip()}")  # Log all output
+                # Match any https URL from localtunnel
+                if "https://" in line:
                     import re
-                    match = re.search(r"https://[^\s]+", line)
+                    # Try to extract URL
+                    match = re.search(r"https://[^\s)]+", line)
                     if match:
                         url = match.group(0).rstrip()
-                        print(f"✓ localtunnel established: {url}")
+                        print(f"\n✓ localtunnel established: {url}\n")
                         break
         except FileNotFoundError:
             print("✕ localtunnel not installed. Install with: npm install -g localtunnel")
         except Exception as e:
             print(f"✕ localtunnel failed: {e}")
+            import traceback
+            traceback.print_exc()
 
     else:
         print(f"✕ Unknown tunnel provider: {provider}")
